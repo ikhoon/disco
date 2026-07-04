@@ -1,0 +1,168 @@
+#compdef disco
+# zsh completion for disco.
+# Install: `brew install ikhoon/tap/disco` sets this up automatically; manually,
+# drop it as `_disco` into a directory on $fpath (e.g.
+#   ~/.local/share/zsh/site-functions), then run `compinit`.
+#
+# All completion here is static — disco's dynamic values (guild/channel IDs)
+# live behind an authenticated network call, too slow for a TAB.
+
+_disco() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
+
+  _arguments -C \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '(-V --version)'{-V,--version}'[show version]' \
+    '1: :_disco_subcommands' \
+    '*::arg:->args'
+
+  case $state in
+    args)
+      curcontext="${curcontext%:*:*}:disco-$words[1]:"
+      case $words[1] in
+        read)        _disco_cmd_read ;;
+        channel)     _disco_cmd_channel ;;
+        thread)      _disco_cmd_thread ;;
+        message)     _disco_cmd_message ;;
+        mention)     _disco_cmd_mention ;;
+        search)      _disco_cmd_search ;;
+        guilds)      _disco_cmd_guilds ;;
+        channels)    _disco_cmd_channels ;;
+        dms)         _disco_cmd_dms ;;
+        whoami)      _disco_cmd_whoami ;;
+        auth)        _disco_cmd_auth ;;
+        config)      _disco_cmd_config ;;
+        completions) _disco_cmd_completions ;;
+      esac
+      ;;
+  esac
+}
+
+_disco_subcommands() {
+  local -a subs
+  subs=(
+    'read:auto-dispatch a Discord URL or channel ID'
+    'channel:channel history'
+    'thread:thread messages'
+    'message:single message by link'
+    'mention:your recent mentions'
+    'search:search messages'
+    'guilds:list servers you are in'
+    'channels:list channels in a server'
+    'dms:list your DM / group-DM channels'
+    'whoami:show the authenticated account'
+    'auth:auth status / set / clear'
+    'config:show or set config'
+    'completions:print or install shell completion'
+    'help:show help'
+  )
+  _describe -t commands 'subcommand' subs
+}
+
+_disco_cmd_read() {
+  _arguments \
+    '--days[lookup window in days]:n:' \
+    '--limit[max messages]:n:' \
+    '--since[since time (10m/2h/3d/1w or ISO date)]:time:' \
+    '--json[JSON output]' \
+    '--bot[treat the token as a bot token]' \
+    '1:discord url or channel id:'
+}
+
+_disco_cmd_channel() {
+  _arguments \
+    '--days[lookup window in days]:n:' \
+    '--limit[max messages]:n:' \
+    '--since[since time (10m/2h/3d/1w or ISO date)]:time:' \
+    '--json[JSON output]' \
+    '--bot[treat the token as a bot token]' \
+    '1:channel url or id:'
+}
+
+_disco_cmd_thread() {
+  _arguments \
+    '--limit[max messages]:n:' \
+    '--json[JSON output]' \
+    '--bot[treat the token as a bot token]' \
+    '1:thread url or id:'
+}
+
+_disco_cmd_message() {
+  _arguments \
+    '--json[JSON output]' \
+    '--bot[treat the token as a bot token]' \
+    '1:message url or channel id:' \
+    '2:message id (when a channel id was given first):'
+}
+
+_disco_cmd_mention() {
+  # User-token only (Discord exposes no mentions inbox to bots).
+  _arguments \
+    '--after[after time (10m/2h/3d/1w or ISO date)]:time:' \
+    '--since[alias of --after]:time:' \
+    '--guild[limit to one guild]:guild id:' \
+    '--limit[max mentions]:n:' \
+    '--json[JSON output]'
+}
+
+_disco_cmd_search() {
+  _arguments \
+    '--guild[search one guild (default: default_guild, else all guilds)]:guild id:' \
+    '--channel[search one DM channel (user token)]:dm channel id:' \
+    '--count[result count]:n:' \
+    '--sort[result order]:order:(timestamp relevance)' \
+    '--json[JSON output]' \
+    '--bot[treat the token as a bot token]' \
+    '1:query:'
+}
+
+_disco_cmd_guilds() {
+  _arguments '--json[JSON output]' '--bot[treat the token as a bot token]'
+}
+
+_disco_cmd_channels() {
+  _arguments \
+    '--json[JSON output]' \
+    '--bot[treat the token as a bot token]' \
+    '1:guild id:'
+}
+
+_disco_cmd_dms() {
+  # User-token only (bots cannot list their DM channels).
+  _arguments '--json[JSON output]'
+}
+
+_disco_cmd_whoami() {
+  _arguments '--json[JSON output]' '--bot[treat the token as a bot token]'
+}
+
+_disco_cmd_auth() {
+  _arguments \
+    '--token[token to store (with `set`)]:token:' \
+    '--bot[store/verify as a bot token]' \
+    '--json[JSON output]' \
+    '1:subcommand:(status set clear)'
+}
+
+_disco_cmd_config() {
+  _arguments \
+    '1:subcommand:(show path set-guild)' \
+    '2:guild id (for set-guild):'
+}
+
+_disco_cmd_completions() {
+  _arguments \
+    '--shell[target shell]:shell:(zsh bash)' \
+    '--install[write the script to the standard location and print how to enable it]'
+}
+
+# Loaded via fpath autoload → run the completer; loaded via
+# `source <(disco completions --shell zsh)` → just register it (running the
+# completer outside a completion context errors with "_arguments: can only be
+# called from completion function").
+if [[ "${funcstack[1]}" = _disco ]]; then
+    _disco "$@"
+else
+    compdef _disco disco
+fi

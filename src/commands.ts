@@ -3,7 +3,7 @@
 import { DiscordClient, DiscordError } from "./client.ts";
 import type { DiscordMessage, DiscordUser, DiscordGuild, DiscordChannel, SearchResponse } from "./types.ts";
 import { displayName } from "./types.ts";
-import { printMessages, printGuilds, printChannels, printNormalized, printJson, normalizeMessage } from "./format.ts";
+import { printMessages, printGuilds, printChannels, printDms, printNormalized, printJson, normalizeMessage } from "./format.ts";
 import { info, debug, warn } from "./log.ts";
 
 const MAX_PER_PAGE = 100; // /channels/{id}/messages and /users/@me/mentions cap
@@ -46,6 +46,18 @@ export async function cmdChannels(client: DiscordClient, guildId: string, json: 
   const channels = await client.request<DiscordChannel[]>(`/guilds/${guildId}/channels`);
   if (!json) info(`${channels.length} channel(s) in guild ${guildId}`);
   printChannels(channels, json);
+}
+
+// ---- dms ----------------------------------------------------------------------
+
+export async function cmdDms(client: DiscordClient, json: boolean): Promise<void> {
+  if (client.isBot) throw userOnly("dms");
+  const channels = await client.request<DiscordChannel[]>("/users/@me/channels");
+  // Most recently active first (last_message_id is a time-ordered snowflake).
+  const key = (c: DiscordChannel) => BigInt(c.last_message_id ?? c.id);
+  channels.sort((a, b) => (key(a) > key(b) ? -1 : key(a) < key(b) ? 1 : 0));
+  if (!json) info(`${channels.length} DM channel(s)`);
+  printDms(channels, json);
 }
 
 // ---- channel / thread history ----------------------------------------------
