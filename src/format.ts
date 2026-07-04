@@ -173,6 +173,37 @@ export function printChannels(channels: DiscordChannel[], json: boolean): void {
   process.stdout.write(out.join("\n") + "\n");
 }
 
+/** Print DM / group-DM channels (assumed pre-sorted, most recent first). */
+export function printDms(channels: DiscordChannel[], json: boolean): void {
+  const label = (c: DiscordChannel) =>
+    c.name || (c.recipients ?? []).map(displayName).join(", ") || "(no recipients)";
+  if (json) {
+    printJson(
+      channels.map((c) => ({
+        id: c.id,
+        type: c.type,
+        type_name: CHANNEL_TYPE[c.type] ?? String(c.type),
+        name: label(c),
+        recipients: (c.recipients ?? []).map((u) => ({
+          id: u.id,
+          name: displayName(u),
+          username: u.username,
+        })),
+        last_message_id: c.last_message_id ?? null,
+      })),
+    );
+    return;
+  }
+  if (channels.length === 0) {
+    info("(no DMs)");
+    return;
+  }
+  const rows = channels
+    .map((c) => `  ${c.type === 3 ? "👥" : "@"} ${label(c)}  ${c.id}`)
+    .join("\n");
+  process.stdout.write(rows + "\n");
+}
+
 export function printGuilds(guilds: DiscordGuild[], json: boolean): void {
   if (json) {
     printJson(guilds.map((g) => ({ id: g.id, name: g.name })));

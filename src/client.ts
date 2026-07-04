@@ -2,6 +2,7 @@
 
 import type { Credential } from "./auth.ts";
 import { debug } from "./log.ts";
+import { VERSION } from "./version.ts";
 
 const API_BASE = "https://discord.com/api/v10";
 
@@ -10,7 +11,7 @@ const API_BASE = "https://discord.com/api/v10";
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
-const BOT_UA = "DiscordBot (https://github.com/disco-cli/disco, 0.1.0)";
+const BOT_UA = `DiscordBot (https://github.com/ikhoon/disco, ${VERSION})`;
 
 export class DiscordError extends Error {
   constructor(
