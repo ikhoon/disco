@@ -1,0 +1,369 @@
+#!/usr/bin/env bun
+// disco — Discord activity CLI. Entry point: arg parsing + dispatch.
+
+import { DiscordClient, DiscordError } from "./client.ts";
+import { resolveCredential, storeCredential, clearCredential, type Credential } from "./auth.ts";
+import { loadConfig, saveConfig, configPath } from "./config.ts";
+import { configureLog, warn, info } from "./log.ts";
+import { parseRef, parseTime } from "./util.ts";
+import {
+  cmdWhoami,
+  cmdGuilds,
+  cmdChannels,
+  cmdChannel,
+  cmdThread,
+  cmdMessage,
+  cmdMention,
+  cmdSearch,
+} from "./commands.ts";
+
+const VERSION = "0.1.0";
+
+// ---- tiny arg parser --------------------------------------------------------
+
+interface Args {
+  _: string[];
+  flags: Record<string, string | boolean>;
+}
+
+const BOOL_FLAGS = new Set(["json", "verbose", "quiet", "bot", "help", "version", "simple"]);
+const SHORT: Record<string, string> = { v: "verbose", q: "quiet", h: "help", V: "version" };
+
+function coerceBool(v: string): boolean {
+  const s = v.trim().toLowerCase();
+  return !(s === "false" || s === "0" || s === "no" || s === "");
+}
+
+function parseArgs(argv: string[]): Args {
+  const _: string[] = [];
+  const flags: Record<string, string | boolean> = {};
+  let endOfFlags = false;
+
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (endOfFlags) {
+      _.push(a);
+      continue;
+    }
+    if (a === "--") {
+      endOfFlags = true; // everything after a bare `--` is a positional
+      continue;
+    }
+
+    if (a.startsWith("--")) {
+      let key = a.slice(2);
+      const eq = key.indexOf("=");
+      if (eq >= 0) {
+        const val = key.slice(eq + 1);
+        key = key.slice(0, eq);
+        flags[key] = BOOL_FLAGS.has(key) ? coerceBool(val) : val;
+      } else if (BOOL_FLAGS.has(key)) {
+        flags[key] = true;
+      } else if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) {
+        flags[key] = argv[++i];
+      } else {
+        flags[key] = true;
+      }
+    } else if (a.length > 1 && a[0] === "-" && !/^-\d/.test(a)) {
+      const short = a.slice(1);
+      const key = SHORT[short] ?? short;
+      if (BOOL_FLAGS.has(key)) {
+        flags[key] = true;
+      } else if (i + 1 < argv.length && !argv[i + 1].startsWith("-")) {
+        flags[key] = argv[++i];
+      } else {
+        flags[key] = true;
+      }
+    } else {
+      _.push(a);
+    }
+  }
+  return { _, flags };
+}
+
+function str(v: string | boolean | undefined): string | undefined {
+  return typeof v === "string" ? v : undefined;
+}
+
+/** Parse a positive-integer flag value; throws a clear error on 0, negatives, or non-numbers. */
+function posInt(v: string | boolean | undefined, name: string): number | undefined {
+  if (v === undefined) return undefined;
+  const n = typeof v === "string" ? Number(v) : NaN;
+  if (!Number.isInteger(n) || n <= 0) {
+    throw new DiscordError(0, undefined, `--${name} must be a positive integer (got "${String(v)}").`);
+  }
+  return n;
+}
+
+// ---- help -------------------------------------------------------------------
+
+const HELP = `disco ${VERSION} — Discord activity CLI
+
+Usage: disco <command> [options]
+
+Read commands:
+  read <url|id>       Auto-dispatch a Discord URL (message → single, else → channel)
+  channel <url|id>    Channel history         [--days N | --limit N] [--since T]
+  thread <url|id>     Thread messages         [--limit N]
+  message <url>       Single message by link  (or: message <channelId> <messageId>)
+  mention             Your recent mentions    [--after T | --since T] [--guild ID] [--limit N]  (user token)
+  search <query>      Search messages         [--guild ID | --channel ID] [--count N] [--sort timestamp|relevance]  (user token)
+  guilds              List servers you're in
+  channels <guildId>  List channels in a server
+  whoami              Show the authenticated account
+
+Auth & config:
+  auth [status]       Show auth status (verifies the token)
+  auth set            Store a token (--token <t> | via stdin) [--bot]
+  auth clear          Remove the stored token
+  config              Show config file + path
+  config set-guild <id>   Set the default guild for search/mention
+
+Global options:
+  --json              Machine-readable JSON: { "data": ... }  (for jq)
+  -v, --verbose       Verbose request logging (stderr)
+  -q, --quiet         Suppress info logs
+  --bot               Treat the token as a bot token ("Bot " prefix)
+  -h, --help          Show help
+  -V, --version       Show version
+
+Time (T) accepts: 10m, 2h, 3d, 1w, or an ISO date (2026-06-01T09:00).
+
+Token: set DISCORD_TOKEN, or run \`disco auth set\` (stored in the macOS Keychain).
+  A user token unlocks search + mentions + DMs (⚠️ self-bot use violates Discord ToS).
+  A bot token (--bot) only reads channels/threads/messages where the bot is present.
+
+Get a user token: open Discord in the browser → DevTools → Network → copy the
+'authorization' request header value (used raw, no "Bot " prefix).
+
+Config file: ${configPath()}
+`;
+
+// ---- credential helper ------------------------------------------------------
+
+async function needClient(flags: Args["flags"]): Promise<DiscordClient> {
+  const optBot = flags.bot === true ? true : undefined;
+  const cred = await resolveCredential(optBot);
+  if (!cred) {
+    throw new DiscordError(
+      0,
+      undefined,
+      "no token found. Set DISCORD_TOKEN or run `disco auth set` (see `disco --help`).",
+    );
+  }
+  return new DiscordClient(cred);
+}
+
+function refOrThrow(input: string | undefined, what: string) {
+  if (!input) throw new DiscordError(0, undefined, `missing ${what}. See \`disco --help\`.`);
+  const ref = parseRef(input);
+  if (!ref) throw new DiscordError(0, undefined, `could not parse "${input}" as a Discord URL or ID.`);
+  return ref;
+}
+
+// ---- auth / config subcommands ---------------------------------------------
+
+async function runAuth(args: Args): Promise<void> {
+  const sub = args._[1] ?? "status";
+  const json = args.flags.json === true;
+
+  if (sub === "clear") {
+    await clearCredential();
+    info("token cleared from the Keychain.");
+    return;
+  }
+
+  if (sub === "set") {
+    let token = str(args.flags.token);
+    if (!token && !process.stdin.isTTY) {
+      token = (await Bun.stdin.text()).trim();
+    }
+    if (!token) {
+      throw new DiscordError(0, undefined, "provide a token: `disco auth set --token <t>` or `echo <t> | disco auth set`.");
+    }
+    const bot = args.flags.bot === true;
+    const cred: Credential = { token, bot };
+    // Validate before storing.
+    const client = new DiscordClient(cred);
+    await cmdWhoami(client, false);
+    await storeCredential(cred);
+    info(`token stored (${bot ? "bot" : "user"}).`);
+    return;
+  }
+
+  // status (default)
+  const cred = await resolveCredential(args.flags.bot === true ? true : undefined);
+  if (!cred) {
+    info("not authenticated — no token in DISCORD_TOKEN or the Keychain.");
+    process.exitCode = 1;
+    return;
+  }
+  const client = new DiscordClient(cred);
+  await cmdWhoami(client, json);
+}
+
+async function runConfig(args: Args): Promise<void> {
+  const sub = args._[1];
+  const cfg = await loadConfig();
+
+  if (sub === "set-guild") {
+    const id = args._[2];
+    if (!id) throw new DiscordError(0, undefined, "usage: disco config set-guild <guildId>");
+    cfg.default_guild = id;
+    await saveConfig(cfg);
+    info(`default_guild set to ${id}`);
+    return;
+  }
+  if (sub === "path") {
+    process.stdout.write(configPath() + "\n");
+    return;
+  }
+  // show
+  info(`config: ${configPath()}`);
+  process.stdout.write(JSON.stringify(cfg, null, 2) + "\n");
+}
+
+// ---- main -------------------------------------------------------------------
+
+async function main(argv: string[]): Promise<void> {
+  const args = parseArgs(argv);
+  configureLog({ verbose: args.flags.verbose === true, quiet: args.flags.quiet === true });
+
+  if (args.flags.version === true) {
+    process.stdout.write(VERSION + "\n");
+    return;
+  }
+  const command = args._[0];
+  if (!command || args.flags.help === true || command === "help") {
+    process.stdout.write(HELP);
+    return;
+  }
+
+  const json = args.flags.json === true;
+
+  switch (command) {
+    case "auth":
+      return runAuth(args);
+    case "config":
+      return runConfig(args);
+
+    case "whoami":
+      return cmdWhoami(await needClient(args.flags), json);
+    case "guilds":
+      await cmdGuilds(await needClient(args.flags), json);
+      return;
+
+    case "channels": {
+      const arg = args._[1];
+      let guildId: string | undefined;
+      if (arg) {
+        guildId = /^\d{15,25}$/.test(arg) ? arg : arg.match(/channels\/(\d+)/)?.[1];
+      }
+      guildId = guildId ?? (await loadConfig()).default_guild;
+      if (!guildId) {
+        throw new DiscordError(0, undefined, "usage: disco channels <guildId>  (or set one with `disco config set-guild`)");
+      }
+      return cmdChannels(await needClient(args.flags), guildId, json);
+    }
+
+    case "read": {
+      const ref = refOrThrow(args._[1], "URL or channel ID");
+      const client = await needClient(args.flags);
+      if (ref.messageId) {
+        return cmdMessage(client, ref.channelId, ref.messageId, { json, guildId: ref.guildId });
+      }
+      const sinceR = str(args.flags.since);
+      return cmdChannel(client, ref.channelId, {
+        days: posInt(args.flags.days, "days"),
+        limit: posInt(args.flags.limit, "limit"),
+        since: sinceR ? parseTime(sinceR) : undefined,
+        json,
+        guildId: ref.guildId,
+      });
+    }
+
+    case "channel": {
+      const ref = refOrThrow(args._[1], "channel URL or ID");
+      const since = str(args.flags.since);
+      const opts = {
+        days: posInt(args.flags.days, "days"),
+        limit: posInt(args.flags.limit, "limit"),
+        since: since ? parseTime(since) : undefined,
+        json,
+        guildId: ref.guildId,
+      };
+      return cmdChannel(await needClient(args.flags), ref.channelId, opts);
+    }
+
+    case "thread": {
+      const ref = refOrThrow(args._[1], "thread URL or ID");
+      const limit = posInt(args.flags.limit, "limit");
+      return cmdThread(await needClient(args.flags), ref.channelId, { limit, json, guildId: ref.guildId });
+    }
+
+    case "message": {
+      // Accept a URL, or two positionals: message <channelId> <messageId>.
+      let channelId: string;
+      let messageId: string | undefined;
+      let guildId: string | null = null;
+      if (args._[2]) {
+        channelId = args._[1];
+        messageId = args._[2];
+      } else {
+        const ref = refOrThrow(args._[1], "message URL");
+        channelId = ref.channelId;
+        messageId = ref.messageId;
+        guildId = ref.guildId;
+      }
+      if (!messageId) {
+        throw new DiscordError(0, undefined, "need a message: pass a message URL, or `message <channelId> <messageId>`.");
+      }
+      return cmdMessage(await needClient(args.flags), channelId, messageId, { json, guildId });
+    }
+
+    case "mention": {
+      const afterStr = str(args.flags.after) ?? str(args.flags.since);
+      const opts = {
+        after: afterStr ? parseTime(afterStr) : undefined,
+        guildId: str(args.flags.guild),
+        limit: posInt(args.flags.limit, "limit"),
+        json,
+      };
+      return cmdMention(await needClient(args.flags), opts);
+    }
+
+    case "search": {
+      const query = args._.slice(1).join(" ").trim();
+      if (!query) throw new DiscordError(0, undefined, 'usage: disco search "<query>" [--guild ID]');
+      const cfg = await loadConfig();
+      const sortRaw = str(args.flags.sort);
+      const sort = sortRaw === "relevance" ? "relevance" : sortRaw === "timestamp" ? "timestamp" : undefined;
+      return cmdSearch(
+        await needClient(args.flags),
+        query,
+        {
+          guildId: str(args.flags.guild),
+          channelId: str(args.flags.channel),
+          count: posInt(args.flags.count, "count"),
+          sort,
+          json,
+        },
+        cfg.default_guild,
+      );
+    }
+
+    default:
+      warn(`unknown command: ${command}\n`);
+      process.stdout.write(HELP);
+      process.exitCode = 2;
+  }
+}
+
+main(Bun.argv.slice(2)).catch((err) => {
+  if (err instanceof DiscordError) {
+    warn(`error: ${err.message}`);
+  } else {
+    warn(`error: ${err?.message ?? err}`);
+  }
+  process.exitCode = 1;
+});
