@@ -15,6 +15,15 @@ function coerceBool(v: string): boolean {
   return !(s === "false" || s === "0" || s === "no" || s === "");
 }
 
+/**
+ * Can the next argv token serve as a flag's value? Anything flag-like is out,
+ * but negative numbers ("-5") and the bare stdin marker ("-") are values.
+ */
+function takesValue(next: string | undefined): next is string {
+  if (next === undefined) return false;
+  return next === "-" || !next.startsWith("-") || /^-\d/.test(next);
+}
+
 export function parseArgs(argv: string[]): Args {
   const _: string[] = [];
   const flags: Record<string, string | boolean> = {};
@@ -40,7 +49,7 @@ export function parseArgs(argv: string[]): Args {
         flags[key] = BOOL_FLAGS.has(key) ? coerceBool(val) : val;
       } else if (BOOL_FLAGS.has(key)) {
         flags[key] = true;
-      } else if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) {
+      } else if (takesValue(argv[i + 1])) {
         flags[key] = argv[++i];
       } else {
         flags[key] = true;
@@ -50,7 +59,7 @@ export function parseArgs(argv: string[]): Args {
       const key = SHORT[short] ?? short;
       if (BOOL_FLAGS.has(key)) {
         flags[key] = true;
-      } else if (i + 1 < argv.length && !argv[i + 1].startsWith("-")) {
+      } else if (takesValue(argv[i + 1])) {
         flags[key] = argv[++i];
       } else {
         flags[key] = true;

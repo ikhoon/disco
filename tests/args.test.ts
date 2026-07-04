@@ -53,6 +53,20 @@ describe("parseArgs", () => {
     const a = parseArgs(["mention", "--guild"]);
     expect(a.flags.guild).toBe(true); // posInt/str() then reject/ignore it downstream
   });
+
+  test("value flags never swallow a following flag (--shell -h)", () => {
+    const a = parseArgs(["completions", "--shell", "-h"]);
+    expect(a.flags.shell).toBe(true);
+    expect(a.flags.help).toBe(true);
+    const b = parseArgs(["mention", "--guild", "--json"]);
+    expect(b.flags.guild).toBe(true);
+    expect(b.flags.json).toBe(true);
+  });
+
+  test("negative numbers and the bare stdin marker still count as values", () => {
+    expect(parseArgs(["--offset", "-1"]).flags.offset).toBe("-1");
+    expect(parseArgs(["--token", "-"]).flags.token).toBe("-");
+  });
 });
 
 describe("posInt", () => {

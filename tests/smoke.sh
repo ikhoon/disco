@@ -38,9 +38,15 @@ assert_exit() {
 echo "disco smoke tests"
 
 # Version — must match package.json (src/version.ts is the embedded source).
+# Guard against an empty parse: every string contains "", so asserting on an
+# empty EXPECTED_VERSION would silently pass and hide version regressions.
 EXPECTED_VERSION=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SCRIPT_DIR/../package.json" | head -1)
 out=$("$DISCO" --version 2>&1)
-assert_match "--version reports $EXPECTED_VERSION" "$EXPECTED_VERSION" "$out"
+if [[ -z "$EXPECTED_VERSION" ]]; then
+  fail "--version matches package.json" "could not read version from package.json"
+else
+  assert_match "--version reports $EXPECTED_VERSION" "$EXPECTED_VERSION" "$out"
+fi
 
 # Help lists every subcommand.
 out=$("$DISCO" --help 2>&1)
