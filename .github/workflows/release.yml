@@ -1,0 +1,174 @@
+name: Release
+
+# Builds the arm64 disco binary, publishes a GitHub release with the zip, then
+# bumps the Homebrew formula in ikhoon/homebrew-tap.
+#
+# Two ways to trigger it:
+#   1. Actions -> Release -> "Run workflow", type the version (e.g. 0.1.0). It
+#      creates + pushes the v<version> tag, then runs the release in this same
+#      run. (Pushing the tag with GITHUB_TOKEN does NOT re-trigger the tag path
+#      below — GitHub suppresses that to avoid recursion — so there's no double
+#      run.)
+#   2. Push a v<version> tag yourself: `git tag v0.1.0 && git push origin v0.1.0`.
+#
+# Either way the version must match package.json AND src/version.ts (bump +
+# commit them first — scripts/package-release.sh enforces the pair).
+#
+# One-time setup: add a repository secret HOMEBREW_TAP_TOKEN — a PAT with
+# Contents: read/write on ikhoon/homebrew-tap. The default GITHUB_TOKEN cannot
+# push to another repo, so the tap bump needs its own token.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, e.g. 0.1.0 — must match package.json; creates + pushes tag v<version>"
+        required: true
+        type: string
+
+permissions:
+  contents: write # create the GitHub release + push the tag in THIS repo
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false # never interrupt a release mid-flight
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Resolve version + tag
+        id: v
+        env:
+          # Pass the dispatch input through the environment, not ${{ }} string
+          # interpolation, so a hostile/malformed value can't break out of the
+          # shell (github.event_name / GITHUB_REF_NAME are trusted contexts).
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="$VERSION_INPUT"
+          else
+            VERSION="$GITHUB_REF_NAME"
+          fi
+          VERSION="${VERSION#v}" # tolerate a leading "v"
+          # Accept only a SemVer-ish version — it flows into git/gh/sed below.
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$'; then
+            echo "::error::invalid version '$VERSION' — expected SemVer like 0.1.0"
+            exit 1
+          fi
+          {
+            echo "version=$VERSION"
+            echo "tag=v$VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify version matches package.json
+        run: |
+          VERSION="${{ steps.v.outputs.version }}"
+          PKG="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' package.json | head -1)"
+          echo "version=$VERSION  package.json=$PKG"
+          if [ "$VERSION" != "$PKG" ]; then
+            echo "::error::version $VERSION does not match package.json $PKG — bump package.json first"
+            exit 1
+          fi
+
+      - name: Create + push tag (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          TAG="${{ steps.v.outputs.tag }}"
+          if git ls-remote --exit-code origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::tag $TAG already exists — bump the version first"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "disco $TAG"
+          # actions/checkout persists the GITHUB_TOKEN, so this push is authorized;
+          # a GITHUB_TOKEN-pushed tag does NOT re-trigger the on.push.tags run.
+          git push origin "$TAG"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun run test
+
+      - name: Build + package the release zip
+        run: bash scripts/package-release.sh
+
+      - name: Smoke test the packaged binary
+        run: bash tests/smoke.sh
+
+      - name: Resolve artifact + checksum
+        id: artifact
+        run: |
+          VERSION="${{ steps.v.outputs.version }}"
+          ZIP="dist/disco-${VERSION}-macos-arm64.zip"
+          SHA="$(shasum -a 256 "$ZIP" | cut -d' ' -f1)"
+          {
+            echo "zip=$ZIP"
+            echo "sha256=$SHA"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.v.outputs.tag }}"
+          ZIP="${{ steps.artifact.outputs.zip }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" --clobber
+          else
+            gh release create "$TAG" "$ZIP" \
+              --title "disco ${{ steps.v.outputs.version }}" \
+              --generate-notes
+          fi
+
+      - name: Check out the Homebrew tap
+        uses: actions/checkout@v5
+        with:
+          repository: ikhoon/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Bump the formula
+        run: |
+          VERSION="${{ steps.v.outputs.version }}"
+          SHA="${{ steps.artifact.outputs.sha256 }}"
+          URL="https://github.com/ikhoon/disco/releases/download/v${VERSION}/disco-${VERSION}-macos-arm64.zip"
+          F="homebrew-tap/Formula/disco.rb"
+          # BSD sed (macOS runner): -i needs an explicit empty backup suffix.
+          sed -i '' \
+            -e "s|^  version \".*\"|  version \"${VERSION}\"|" \
+            -e "s|^  url \".*\"|  url \"${URL}\"|" \
+            -e "s|^  sha256 \".*\"|  sha256 \"${SHA}\"|" \
+            -e "s|assert_match \"[^\"]*\"|assert_match \"${VERSION}\"|" \
+            "$F"
+          echo "----- updated Formula/disco.rb -----"
+          cat "$F"
+
+      - name: Commit + push the tap
+        working-directory: homebrew-tap
+        run: |
+          VERSION="${{ steps.v.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "formula already up to date; nothing to commit"
+            exit 0
+          fi
+          git add Formula/disco.rb
+          git commit -m "Update disco formula to ${VERSION}"
+          git push

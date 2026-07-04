@@ -23,6 +23,9 @@ export interface DiscordChannel {
   guild_id?: string;
   parent_id?: string | null;
   position?: number;
+  /** DM / group-DM only. */
+  recipients?: DiscordUser[];
+  last_message_id?: string | null;
 }
 
 /** Discord channel type enum → short label. */

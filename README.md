@@ -1,8 +1,30 @@
-# disco
+<h1 align="center">disco</h1>
 
-A small CLI for reading your Discord **activity** from the terminal — channel
-history, threads, single messages, your recent mentions, and keyword search.
-JSON output on every command for piping into `jq`.
+<p align="center">
+  <b>A Discord activity CLI.</b><br>
+  Read channel history, threads, mentions, and search from the terminal — made for scripts, <code>jq</code>, and LLM pipelines.
+</p>
+
+<p align="center">
+  <a href="https://github.com/ikhoon/disco/actions/workflows/ci.yml"><img src="https://github.com/ikhoon/disco/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
+
+```console
+$ disco mention --after 2h
+2 mention(s) since 2026-07-04T07:00:00.000Z
+[2026-07-04 08:41] Jane Doe:
+    @ikhoon deploy failed on main — can you take a look?
+    https://discord.com/channels/111111111111111111/222222222222222222/333333333333333333
+
+[2026-07-04 08:55] CI Bot [bot]:
+    build #1242 fixed by @ikhoon
+    https://discord.com/channels/111111111111111111/222222222222222222/333333333333333444
+```
+
+- ⚡ **Fast** — a single self-contained binary; no Node, no npm install.
+- 📖 **Read-only by design** — history, threads, single messages, mentions, search, DMs. It never posts.
+- 🤖 **Scriptable** — `--json` on every command emits `{ "data": ... }`; logs go to stderr so pipes stay clean.
+- 🧭 **Polite to Discord** — honors rate limits (429/202), never retries 401/403.
 
 > ⚠️ **Read this first.** `disco` talks to Discord's REST API. To do the useful
 > things (search, mentions, DMs, every server you're in) it needs a **user
@@ -14,19 +36,59 @@ JSON output on every command for piping into `jq`.
 > servers where the bot is a member, and cannot search or list mentions
 > (Discord doesn't expose those to bots).
 
+---
+
+## Contents
+
+- [Install](#install)
+- [Auth](#auth) — tokens and where they live
+- [Quick start](#quick-start) — copy-paste cheat sheet
+- [URLs, IDs, and time expressions](#urls-ids-and-time-expressions)
+- [Scripting with JSON](#scripting-with-json)
+- [Notes & limits](#notes--limits)
+- [Configuration](#configuration)
+- [Shell completion](#shell-completion)
+- [Development](#development)
+
+---
+
 ## Install
+
+> Apple Silicon (arm64) macOS only for now.
+
+### Homebrew (recommended)
+
+```bash
+brew install ikhoon/tap/disco
+```
+
+Installs the binary and zsh/bash completions in one shot (brew's completion
+directory is already on `fpath`, so completion just works in a new shell).
+
+### From a release
+
+Download `disco-<version>-macos-arm64.zip` from
+[Releases](https://github.com/ikhoon/disco/releases), unzip it, and follow
+`README.txt` inside (clear the download quarantine, drop `disco` on your PATH).
+
+### From source
 
 Requires [Bun](https://bun.sh).
 
 ```bash
+git clone https://github.com/ikhoon/disco ~/src/disco
+cd ~/src/disco
 bun run install-local     # builds a single binary → ~/.local/bin/disco
-# or run from source without installing:
-bun run src/index.ts --help
+disco completions --install   # optional: per-user shell completion
 ```
+
+Or run without installing: `bun run src/index.ts --help`.
+
+---
 
 ## Auth
 
-`disco` reads a token from `DISCORD_TOKEN` (env) or the macOS Keychain.
+`disco` reads a token from `DISCORD_TOKEN` (env) or the **macOS Keychain**.
 
 ```bash
 disco auth set --token "<your-token>"     # stores in the Keychain (validates first)
@@ -47,41 +109,50 @@ disco auth set --token "<bot-token>" --bot # store a bot token instead
 
 Tokens rotate on password change / logout — re-extract if you start getting 401s.
 
-## Usage
+---
+
+## Quick start
 
 ```bash
+# READ ─────────────────────────────────────────────────────────────────
 disco read <url>                 # auto: message URL → single message, else channel
 disco channel <url|id> --days 7  # last 7 days of a channel (default)
 disco channel <url|id> --limit 50
 disco thread <url|id>            # all messages in a thread
 disco message <messageUrl>       # one message  (also: message <channelId> <messageId>)
 
-disco mention                    # your mentions in the last 10 minutes   (user token)
+# INBOX (user token) ───────────────────────────────────────────────────
+disco mention                    # your mentions in the last 10 minutes
 disco mention --after 1d --json
 disco mention --since 2026-06-01T09:00 --guild <guildId>
 
-disco search "deploy failed"                       # across all your servers (user token)
+# SEARCH (user token) ──────────────────────────────────────────────────
+disco search "deploy failed"                       # across all your servers
 disco search "release" --guild <guildId> --count 25
-disco search "invoice" --channel <dmChannelId>     # search a DM
+disco search "invoice" --channel <dmChannelId>     # search a DM (IDs: disco dms)
 disco search "bug" --sort relevance --json
 
+# DISCOVER ─────────────────────────────────────────────────────────────
 disco guilds                     # list servers (to get guild IDs)
 disco channels <guildId>         # list a server's channels (grouped by category)
+disco dms                        # list DM / group-DM channels + their IDs (user token)
 disco whoami
 ```
 
-### URLs and IDs
+---
+
+## URLs, IDs, and time expressions
 
 - Message: `https://discord.com/channels/<guild>/<channel>/<message>`
 - Channel/thread: `https://discord.com/channels/<guild>/<channel>`
 - Bare snowflake IDs work too (guild context for permalinks won't be known).
 - DMs use the `@me` pseudo-guild.
+- Time (`--after` / `--since` / `--until`): `10m`, `2h`, `3d`, `1w`, or an ISO
+  date like `2026-06-01T09:00`.
 
-### Time expressions (`--after` / `--since`)
+---
 
-`10m`, `2h`, `3d`, `1w`, or an ISO date like `2026-06-01T09:00`.
-
-### JSON
+## Scripting with JSON
 
 Every command takes `--json` and emits `{ "data": ... }`:
 
@@ -93,6 +164,8 @@ disco mention --after 2h --json | jq '.data[].permalink'
 Logs go to **stderr**, data to **stdout**, so pipes stay clean. Use `-q` to
 silence info logs, `-v` for verbose request tracing.
 
+---
+
 ## Notes & limits
 
 - **Rate limits** are honored automatically (429 `retry_after`, and 202 while a
@@ -102,9 +175,11 @@ silence info logs, `-v` for verbose request tracing.
 - **`search`** returns ≤25 hits per page and has no cross-server endpoint — with
   no `--guild`, `disco` fans out across every server you're in and merges the
   results. Set a `default_guild` (below) or pass `--guild` to keep it fast.
-- Bot tokens: `mention` and DM `search` are user-only and will error clearly.
+- Bot tokens: `mention`, `dms`, and DM `search` are user-only and will error clearly.
 
-## Config
+---
+
+## Configuration
 
 `~/.config/disco/config.json` (optional):
 
@@ -119,3 +194,48 @@ silence info logs, `-v` for verbose request tracing.
 disco config                       # show current config + path
 disco config set-guild <guildId>   # set default_guild
 ```
+
+---
+
+## Shell completion
+
+Installed automatically by `brew install`. For manual setups:
+
+```bash
+disco completions --install                # ~/.local/share/… for your $SHELL
+disco completions --shell zsh              # or print the script to stdout
+source <(disco completions --shell zsh)    # or source it ad hoc (add to ~/.zshrc)
+```
+
+`--install` targets the per-user XDG locations: zsh →
+`~/.local/share/zsh/site-functions/_disco` (add that dir to `fpath` before
+`compinit` — the command prints the exact line), bash →
+`~/.local/share/bash-completion/completions/disco` (bash-completion@2 loads it
+automatically).
+
+---
+
+## Development
+
+```bash
+bun run src/index.ts --help   # run from source
+bun run typecheck             # tsc --noEmit (src + tests)
+bun test                      # unit tests (client, commands, args, format, completions)
+bun run build                 # compile a single binary → dist/disco
+bash tests/smoke.sh           # smoke-test the compiled binary
+bun run package-release       # build the release zip the Homebrew formula ships
+```
+
+Layout: `src/index.ts` (arg parsing + dispatch) · `src/commands.ts` (command
+impls) · `src/client.ts` (REST + rate limits) · `src/format.ts` (human/JSON
+output) · `completions/` (zsh/bash scripts, embedded into the binary at build
+time).
+
+CI (`.github/workflows/ci.yml`) runs typecheck + tests + build + smoke on every
+push/PR.
+
+Releasing: bump `version` in `package.json` **and** `VERSION` in
+`src/version.ts`, merge, then run the **Release** workflow (Actions → Release →
+enter the version). It tags `v<version>`, rebuilds + retests, publishes the
+GitHub release zip, and bumps `url`/`sha256` in `homebrew-tap/Formula/disco.rb`
+automatically (needs the `HOMEBREW_TAP_TOKEN` repo secret).

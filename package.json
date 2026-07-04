@@ -2,6 +2,8 @@
   "name": "disco",
   "version": "0.1.0",
   "description": "Discord activity CLI — read channels, threads, mentions, and search from the terminal",
+  "repository": "github:ikhoon/disco",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "disco": "./src/index.ts"
@@ -9,8 +11,10 @@
   "scripts": {
     "start": "bun run src/index.ts",
     "typecheck": "bun x tsc --noEmit",
+    "test": "bun test",
     "build": "bun build --compile --minify --outfile dist/disco src/index.ts",
-    "install-local": "bun run build && mkdir -p \"$HOME/.local/bin\" && cp dist/disco \"$HOME/.local/bin/disco\""
+    "install-local": "bun run build && mkdir -p \"$HOME/.local/bin\" && cp dist/disco \"$HOME/.local/bin/disco\"",
+    "package-release": "scripts/package-release.sh"
   },
   "dependencies": {},
   "devDependencies": {

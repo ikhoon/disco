@@ -6,6 +6,9 @@ import { resolveCredential, storeCredential, clearCredential, type Credential } 
 import { loadConfig, saveConfig, configPath } from "./config.ts";
 import { configureLog, warn, info } from "./log.ts";
 import { parseRef, parseTime } from "./util.ts";
+import { runCompletions } from "./completions.ts";
+import { parseArgs, str, posInt, type Args } from "./args.ts";
+import { VERSION } from "./version.ts";
 import {
   cmdWhoami,
   cmdGuilds,
@@ -15,85 +18,8 @@ import {
   cmdMessage,
   cmdMention,
   cmdSearch,
+  cmdDms,
 } from "./commands.ts";
-
-const VERSION = "0.1.0";
-
-// ---- tiny arg parser --------------------------------------------------------
-
-interface Args {
-  _: string[];
-  flags: Record<string, string | boolean>;
-}
-
-const BOOL_FLAGS = new Set(["json", "verbose", "quiet", "bot", "help", "version", "simple"]);
-const SHORT: Record<string, string> = { v: "verbose", q: "quiet", h: "help", V: "version" };
-
-function coerceBool(v: string): boolean {
-  const s = v.trim().toLowerCase();
-  return !(s === "false" || s === "0" || s === "no" || s === "");
-}
-
-function parseArgs(argv: string[]): Args {
-  const _: string[] = [];
-  const flags: Record<string, string | boolean> = {};
-  let endOfFlags = false;
-
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (endOfFlags) {
-      _.push(a);
-      continue;
-    }
-    if (a === "--") {
-      endOfFlags = true; // everything after a bare `--` is a positional
-      continue;
-    }
-
-    if (a.startsWith("--")) {
-      let key = a.slice(2);
-      const eq = key.indexOf("=");
-      if (eq >= 0) {
-        const val = key.slice(eq + 1);
-        key = key.slice(0, eq);
-        flags[key] = BOOL_FLAGS.has(key) ? coerceBool(val) : val;
-      } else if (BOOL_FLAGS.has(key)) {
-        flags[key] = true;
-      } else if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) {
-        flags[key] = argv[++i];
-      } else {
-        flags[key] = true;
-      }
-    } else if (a.length > 1 && a[0] === "-" && !/^-\d/.test(a)) {
-      const short = a.slice(1);
-      const key = SHORT[short] ?? short;
-      if (BOOL_FLAGS.has(key)) {
-        flags[key] = true;
-      } else if (i + 1 < argv.length && !argv[i + 1].startsWith("-")) {
-        flags[key] = argv[++i];
-      } else {
-        flags[key] = true;
-      }
-    } else {
-      _.push(a);
-    }
-  }
-  return { _, flags };
-}
-
-function str(v: string | boolean | undefined): string | undefined {
-  return typeof v === "string" ? v : undefined;
-}
-
-/** Parse a positive-integer flag value; throws a clear error on 0, negatives, or non-numbers. */
-function posInt(v: string | boolean | undefined, name: string): number | undefined {
-  if (v === undefined) return undefined;
-  const n = typeof v === "string" ? Number(v) : NaN;
-  if (!Number.isInteger(n) || n <= 0) {
-    throw new DiscordError(0, undefined, `--${name} must be a positive integer (got "${String(v)}").`);
-  }
-  return n;
-}
 
 // ---- help -------------------------------------------------------------------
 
@@ -110,6 +36,7 @@ Read commands:
   search <query>      Search messages         [--guild ID | --channel ID] [--count N] [--sort timestamp|relevance]  (user token)
   guilds              List servers you're in
   channels <guildId>  List channels in a server
+  dms                 List your DM / group-DM channels  (user token)
   whoami              Show the authenticated account
 
 Auth & config:
@@ -118,6 +45,8 @@ Auth & config:
   auth clear          Remove the stored token
   config              Show config file + path
   config set-guild <id>   Set the default guild for search/mention
+  completions         Print shell completion script  [--shell zsh|bash] [--install]
+                      (brew installs completions automatically; --install is for manual setups)
 
 Global options:
   --json              Machine-readable JSON: { "data": ... }  (for jq)
@@ -246,12 +175,19 @@ async function main(argv: string[]): Promise<void> {
       return runAuth(args);
     case "config":
       return runConfig(args);
+    case "completions":
+      process.stdout.write(
+        runCompletions({ shell: str(args.flags.shell) ?? args._[1], install: args.flags.install === true }),
+      );
+      return;
 
     case "whoami":
       return cmdWhoami(await needClient(args.flags), json);
     case "guilds":
       await cmdGuilds(await needClient(args.flags), json);
       return;
+    case "dms":
+      return cmdDms(await needClient(args.flags), json);
 
     case "channels": {
       const arg = args._[1];
