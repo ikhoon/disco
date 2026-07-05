@@ -20,6 +20,8 @@ export interface DiscordChannel {
   id: string;
   type: number;
   name?: string | null;
+  /** Channel topic / description (text channels). */
+  topic?: string | null;
   guild_id?: string;
   parent_id?: string | null;
   position?: number;
