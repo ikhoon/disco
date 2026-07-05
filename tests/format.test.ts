@@ -155,22 +155,20 @@ describe("colored output", () => {
     expect(out).toContain("\x1b[90m1\x1b[0m"); // dim id (technical, recedes)
   });
 
-  test("channels: cyan ▸ category + bold title, tight #text-channel (one color), dim id", async () => {
+  test("channels (human): ▸ category + #names only — ids go to --json", async () => {
     setColorEnabled(true);
-    const out = await captureStdout(() =>
-      printChannels(
-        [
-          { id: "9", name: "ENGINEERING", type: 4, position: 0 },
-          { id: "10", name: "deploys", type: 0, parent_id: "9", position: 0 },
-        ],
-        false,
-      ),
-    );
+    const rows = [
+      { id: "9", name: "ENGINEERING", type: 4, position: 0 },
+      { id: "10", name: "deploys", type: 0, parent_id: "9", position: 0 },
+    ];
+    const out = await captureStdout(() => printChannels(rows, false));
     expect(out).toContain("\x1b[96m▸\x1b[0m"); // cyan section marker
     expect(out).toContain("\x1b[1mENGINEERING\x1b[0m"); // bold category title
-    expect(out).toContain("#deploys"); // # shares the name's color (no separate dim on #)
-    expect(out).not.toContain("\x1b[90m#\x1b[0m"); // the # is not dimmed
-    expect(out).toContain("\x1b[90m10\x1b[0m"); // dim channel id
+    expect(out).toContain("#deploys"); // # shares the name's color
+    expect(out).not.toContain("10"); // no snowflake id clutter in the human list
+
+    const jsonOut = await captureStdout(() => printChannels(rows, true));
+    expect(parseEnvelope(jsonOut).find((c: any) => c.name === "deploys").id).toBe("10"); // id still in --json
   });
 });
 

@@ -110,7 +110,7 @@ export async function cmdGuilds(client: DiscordClient, json: boolean): Promise<D
 
 export async function cmdChannels(client: DiscordClient, guildId: string, json: boolean): Promise<void> {
   const channels = await client.request<DiscordChannel[]>(`/guilds/${guildId}/channels`);
-  if (!json) info(`${channels.length} channel(s) in guild ${guildId}`);
+  if (!json) info(`${channels.length} channels`);
   printChannels(channels, json);
 }
 

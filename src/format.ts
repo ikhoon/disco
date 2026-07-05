@@ -189,16 +189,13 @@ export function printChannels(channels: DiscordChannel[], json: boolean): void {
     channels
       .filter((c) => c.type !== 4 && (c.parent_id ?? null) === parentId)
       .sort((a, b) => pos(a) - pos(b));
-  // The channel name (what you read) carries its marker in one color — text
-  // channels as Discord's tight `#channel`, richer types with an emoji — while
-  // only the snowflake id recedes to dim gray. The id column is aligned.
-  const nameCell = (c: DiscordChannel) => {
+  // Read like Discord's sidebar: just the names, grouped under their categories —
+  // text channels as the tight `#channel`, richer types with an emoji. Snowflake
+  // ids are noise here (you read a channel by name now), so they live only in --json.
+  const line = (c: DiscordChannel) => {
     const nm = c.name ?? "(unnamed)";
-    if (c.type === 0) return `#${nm}`;
-    return `${CHANNEL_ICON[c.type] ?? "#"} ${nm}`;
+    return c.type === 0 ? `    #${nm}` : `    ${CHANNEL_ICON[c.type] ?? "#"} ${nm}`;
   };
-  const nameWidth = Math.max(0, ...channels.filter((c) => c.type !== 4).map((c) => Bun.stringWidth(nameCell(c))));
-  const line = (c: DiscordChannel) => `  ${padVisible(nameCell(c), nameWidth)}   ${dim(c.id)}`;
 
   const out: string[] = [];
   for (const c of childrenOf(null)) out.push(line(c)); // uncategorized first
