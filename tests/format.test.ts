@@ -81,7 +81,7 @@ describe("printMessages", () => {
   test("human mode renders author, body, and permalink", async () => {
     const out = await captureStdout(() => printMessages([base], { json: false, guildId: "111" }));
     expect(out).toContain("Jane Doe");
-    expect(out).toContain("    hello");
+    expect(out).toContain("│ hello"); // body sits under a vertical-bar gutter
     expect(out).toContain("https://discord.com/channels/111/222/333");
   });
 
