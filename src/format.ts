@@ -87,6 +87,9 @@ export function printJson(payload: unknown): void {
 
 function renderMessage(m: NormalizedMessage): string {
   const lines: string[] = [];
+  // A dim vertical-bar gutter ties a message's body to its author line, so blocks
+  // stay visually grouped when scanning many messages.
+  const g = dim("│ ");
   const edited = m.edited ? dim(" (edited)") : "";
   // Show the @username alongside the display name when they differ — the display
   // name is the primary identity (cyan), the handle is secondary (dim).
@@ -96,23 +99,26 @@ function renderMessage(m: NormalizedMessage): string {
     `[${green(fmtTime(m.ts))}] ${cyan(m.author.name)}${handle}${m.author.bot ? dim(" [bot]") : ""}:${edited}`,
   );
   if (m.reply_to) {
-    lines.push(`    ${dim(`↳ re: ${m.reply_to.author}: "${m.reply_to.excerpt}"`)}`);
+    lines.push(`${g}${dim(`↳ re: ${m.reply_to.author}: "${m.reply_to.excerpt}"`)}`);
   }
   const body = m.content.trim();
   if (body) {
-    for (const line of body.split("\n")) lines.push(`    ${line}`);
+    for (const line of body.split("\n")) lines.push(`${g}${line}`);
   } else if (m.attachments.length === 0 && m.embeds.length === 0) {
-    lines.push(`    ${dim("(no text)")}`);
+    lines.push(`${g}${dim("(no text)")}`);
   }
   for (const e of m.embeds) {
-    const head = [e.author, e.title].filter(Boolean).join(" · ");
-    if (head || e.url) lines.push(`    ▪ ${bold(head || "(embed)")}${e.url ? dim(` — ${e.url}`) : ""}`);
-    if (e.description) lines.push(`      ${e.description}`);
+    const head = [e.author, e.title].filter(Boolean).join(" · ") || "(link)";
+    // A link preview is auto-extracted metadata, not the person's words — render the
+    // whole card dim, under a 🔗 marker, so it clearly recedes behind the typed text.
+    lines.push(`${g}${dim(`🔗 ${head}`)}`);
+    if (e.description) lines.push(`${g}${dim(`   ${e.description}`)}`);
+    if (e.url) lines.push(`${g}${dim(`   ${e.url}`)}`);
   }
   for (const a of m.attachments) {
-    lines.push(`    📎 ${a.filename}${dim(` — ${a.url}`)}`);
+    lines.push(`${g}📎 ${a.filename}${dim(` — ${a.url}`)}`);
   }
-  lines.push(`    ${dim(m.permalink)}`);
+  lines.push(`${g}${dim(m.permalink)}`);
   return lines.join("\n");
 }
 
