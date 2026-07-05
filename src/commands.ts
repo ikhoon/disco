@@ -101,7 +101,9 @@ async function finishLogin(raw: string, json: boolean): Promise<void> {
 // ---- guilds -----------------------------------------------------------------
 
 export async function cmdGuilds(client: DiscordClient, json: boolean): Promise<DiscordGuild[]> {
-  const guilds = await client.request<DiscordGuild[]>("/users/@me/guilds", { query: { limit: 200 } });
+  const guilds = await client.request<DiscordGuild[]>("/users/@me/guilds", {
+    query: { limit: 200, with_counts: true },
+  });
   printGuilds(guilds, json);
   return guilds;
 }

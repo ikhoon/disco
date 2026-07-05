@@ -50,6 +50,10 @@ export const CHANNEL_TYPE: Record<number, string> = {
 export interface DiscordGuild {
   id: string;
   name: string;
+  /** true when you own this server (from /users/@me/guilds). */
+  owner?: boolean;
+  /** total members, present when the list is fetched with ?with_counts=true. */
+  approximate_member_count?: number;
 }
 
 export interface DiscordEmbed {
