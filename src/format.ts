@@ -245,19 +245,38 @@ export function printDms(channels: DiscordChannel[], json: boolean): void {
   process.stdout.write(rows + "\n");
 }
 
+/** Compact member count: 88 → "88", 1234 → "1.2k", 12345 → "12k". */
+function fmtCount(n: number): string {
+  if (n < 1000) return String(n);
+  const k = n / 1000;
+  return `${k >= 10 ? Math.round(k) : k.toFixed(1)}k`;
+}
+
 export function printGuilds(guilds: DiscordGuild[], json: boolean): void {
   if (json) {
-    printJson(guilds.map((g) => ({ id: g.id, name: g.name })));
+    printJson(
+      guilds.map((g) => ({
+        id: g.id,
+        name: g.name,
+        owner: !!g.owner,
+        member_count: g.approximate_member_count ?? null,
+      })),
+    );
     return;
   }
   if (guilds.length === 0) {
     info("(no guilds)");
     return;
   }
-  // Name first (what you scan for); the id follows in dim gray, aligned.
-  const width = Math.max(0, ...guilds.map((g) => Bun.stringWidth(g.name)));
+  // Name (what you scan for) + a 👑 if you own it + the member count in the
+  // readable default foreground; the id is noise here, so it lives in --json.
   const rows = guilds
-    .map((g) => `  ${padVisible(g.name, width)}  ${dim(g.id)}`)
+    .map((g) => {
+      const crown = g.owner ? " 👑" : "";
+      const members =
+        g.approximate_member_count != null ? `  ${dim("·")}  ${fmtCount(g.approximate_member_count)} members` : "";
+      return `  ${g.name}${crown}${members}`;
+    })
     .join("\n");
   process.stdout.write(rows + "\n");
 }

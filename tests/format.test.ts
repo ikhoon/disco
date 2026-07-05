@@ -187,6 +187,29 @@ describe("colored output", () => {
   });
 });
 
+describe("printGuilds", () => {
+  const guilds = [
+    { id: "1", name: "Acme", owner: true, approximate_member_count: 1234 },
+    { id: "2", name: "Globex", approximate_member_count: 88 },
+  ];
+
+  test("human: name + 👑 owner + compact member count, no id", async () => {
+    const out = await captureStdout(() => printGuilds(guilds, false));
+    expect(out).toContain("Acme 👑");
+    expect(out).toContain("1.2k members");
+    expect(out).toContain("88 members");
+    expect(out).not.toContain("👑\n  Globex"); // Globex isn't owned → no crown
+    expect(out).not.toContain(" 1\n"); // no snowflake id column
+  });
+
+  test("--json carries id, owner, and member_count", async () => {
+    const out = await captureStdout(() => printGuilds(guilds, true));
+    const data = parseEnvelope(out);
+    expect(data[0]).toEqual({ id: "1", name: "Acme", owner: true, member_count: 1234 });
+    expect(data[1]).toEqual({ id: "2", name: "Globex", owner: false, member_count: 88 });
+  });
+});
+
 describe("printJson", () => {
   test("always emits the { data } envelope", async () => {
     const out = await captureStdout(() => printJson({ a: 1 }));
