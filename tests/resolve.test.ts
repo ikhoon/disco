@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DiscordClient } from "../src/client.ts";
-import { resolveChannelRef } from "../src/resolve.ts";
+import { resolveChannelRef, resolveGuild } from "../src/resolve.ts";
 
 // Minimal fake client: route by path prefix.
 function fakeClient(routes: Record<string, (path: string) => unknown>, isBot = false): DiscordClient {
@@ -123,5 +123,29 @@ describe("resolveChannelRef", () => {
         resolveChannelRef("Acme/nope", throwingClient(), { cachePath }),
       ).rejects.toThrow(/network was called/);
     });
+  });
+});
+
+describe("resolveGuild", () => {
+  const gclient = () => fakeClient({ "/users/@me/guilds": () => GUILDS }); // Acme(g1), Globex(g2)
+
+  test("passes a snowflake through with no lookup", async () => {
+    expect(await resolveGuild("123456789012345678", fakeClient({}))).toBe("123456789012345678");
+  });
+
+  test("pulls the guild id out of a channel URL", async () => {
+    expect(await resolveGuild("https://discord.com/channels/111/222", fakeClient({}))).toBe("111");
+  });
+
+  test("resolves a server name (case-insensitive)", async () => {
+    expect(await resolveGuild("globex", gclient())).toBe("g2");
+  });
+
+  test("errors when no server matches", async () => {
+    await expect(resolveGuild("nope", gclient())).rejects.toThrow(/no server matching/);
+  });
+
+  test("rejects name lookup on a bot token", async () => {
+    await expect(resolveGuild("Acme", fakeClient({}, true))).rejects.toThrow(/needs a user token/);
   });
 });
