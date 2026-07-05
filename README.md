@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/disco-logo.png" alt="disco logo" width="160" height="160">
+</p>
+
 <h1 align="center">disco</h1>
 
 <p align="center">
@@ -7,24 +11,21 @@
 
 <p align="center">
   <a href="https://github.com/ikhoon/disco/actions/workflows/ci.yml"><img src="https://github.com/ikhoon/disco/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/ikhoon/disco/releases/latest"><img src="https://img.shields.io/github/v/release/ikhoon/disco?sort=semver&color=2ea043" alt="Latest release"></a>
+  <a href="https://github.com/ikhoon/homebrew-tap"><img src="https://img.shields.io/badge/brew-ikhoon%2Ftap%2Fdisco-f9a825?logo=homebrew&logoColor=white" alt="Homebrew"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/ikhoon/disco?color=blue" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white" alt="macOS · Apple Silicon">
 </p>
-
-```console
-$ disco mention --after 2h
-2 mention(s) since 2026-07-04T07:00:00.000Z
-[2026-07-04 08:41] Jane Doe:
-    @ikhoon deploy failed on main — can you take a look?
-    https://discord.com/channels/111111111111111111/222222222222222222/333333333333333333
-
-[2026-07-04 08:55] CI Bot [bot]:
-    build #1242 fixed by @ikhoon
-    https://discord.com/channels/111111111111111111/222222222222222222/333333333333333444
-```
 
 - ⚡ **Fast** — a single self-contained binary; no Node, no npm install.
 - 📖 **Read-only by design** — history, threads, single messages, mentions, search, DMs. It never posts.
 - 🤖 **Scriptable** — `--json` on every command emits `{ "data": ... }`; logs go to stderr so pipes stay clean.
+- 🎨 **Colored, readable output** — green timestamps, cyan authors, yellow IDs; off automatically when piped or with `--json`, or explicitly via `--no-color` / `NO_COLOR`.
 - 🧭 **Polite to Discord** — honors rate limits (429/202), never retries 401/403.
+
+<p align="center">
+  <img src="assets/demo-cli.gif" alt="disco CLI demo — mentions, search, channel list, and --json piped to jq" width="820">
+</p>
 
 > ⚠️ **Read this first.** `disco` talks to Discord's REST API. To do the useful
 > things (search, mentions, DMs, every server you're in) it needs a **user
@@ -164,6 +165,11 @@ disco mention --after 2h --json | jq '.data[].permalink'
 Logs go to **stderr**, data to **stdout**, so pipes stay clean. Use `-q` to
 silence info logs, `-v` for verbose request tracing.
 
+Colored output is TTY-only: it turns itself off for pipes, redirects, and
+`--json`, and can be disabled explicitly with `--no-color` or the
+[`NO_COLOR`](https://no-color.org) env var — so you never have to strip ANSI
+codes in scripts.
+
 ---
 
 ## Notes & limits
@@ -228,8 +234,14 @@ bun run package-release       # build the release zip the Homebrew formula ships
 
 Layout: `src/index.ts` (arg parsing + dispatch) · `src/commands.ts` (command
 impls) · `src/client.ts` (REST + rate limits) · `src/format.ts` (human/JSON
-output) · `completions/` (zsh/bash scripts, embedded into the binary at build
-time).
+output) · `src/color.ts` (ANSI styling, TTY-gated) · `completions/` (zsh/bash
+scripts, embedded into the binary at build time).
+
+The README demo gif is re-recorded with `bun run demo` (needs
+[vhs](https://github.com/charmbracelet/vhs); `demo/bin/disco` is a mock that
+prints fictional output, so recording never touches the Discord API). The logo
+is re-rendered with `bun run make-icon` (draws `assets/disco-logo.png` via
+`make-icon.swift`).
 
 CI (`.github/workflows/ci.yml`) runs typecheck + tests + build + smoke on every
 push/PR.
