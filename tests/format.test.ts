@@ -1,5 +1,5 @@
 import { describe, expect, test, afterEach } from "bun:test";
-import { normalizeMessage, printMessages, printDms, printJson } from "../src/format.ts";
+import { normalizeMessage, printMessages, printDms, printChannels, printGuilds, printJson } from "../src/format.ts";
 import { displayName, CHANNEL_TYPE, type DiscordMessage, type DiscordChannel } from "../src/types.ts";
 import { setColorEnabled } from "../src/color.ts";
 import { captureStdout, parseEnvelope } from "./helpers/capture.ts";
@@ -73,6 +73,18 @@ describe("printMessages", () => {
     expect(out).toContain("    hello");
     expect(out).toContain("https://discord.com/channels/111/222/333");
   });
+
+  test("shows the display name and the @username when they differ", async () => {
+    const out = await captureStdout(() => printMessages([base], { json: false, guildId: "111" }));
+    expect(out).toContain("Jane Doe (@jane)"); // global_name + handle
+  });
+
+  test("omits the @username when it equals the display name", async () => {
+    const noGlobal = { ...base, author: { id: "u1", username: "jane" } };
+    const out = await captureStdout(() => printMessages([noGlobal], { json: false, guildId: "111" }));
+    expect(out).toContain("jane");
+    expect(out).not.toContain("(@jane)");
+  });
 });
 
 describe("printDms", () => {
@@ -88,10 +100,14 @@ describe("printDms", () => {
     expect(data[1]).toMatchObject({ id: "2", type_name: "group-dm", name: "project" });
   });
 
-  test("human mode marks group DMs and includes channel ids", async () => {
+  test("human mode marks group DMs, includes ids, and aligns the id column", async () => {
     const out = await captureStdout(() => printDms(channels, false));
-    expect(out).toContain("@ alice  1");
-    expect(out).toContain("👥 project  2");
+    const lines = out.trimEnd().split("\n");
+    expect(lines[0]).toMatch(/@ alice\s+1$/);
+    expect(lines[1]).toMatch(/👥 project\s+2$/);
+    // The id column lines up: the visible width before each id is identical.
+    const beforeId = (l: string, id: string) => Bun.stringWidth(l.slice(0, l.lastIndexOf(id)));
+    expect(beforeId(lines[0], "1")).toBe(beforeId(lines[1], "2"));
   });
 });
 
@@ -119,13 +135,30 @@ describe("colored output", () => {
     expect(parseEnvelope(out)[0].author.name).toBe("Jane Doe");
   });
 
-  test("dm and channel ids go yellow", async () => {
+  test("dm labels are cyan and ids recede to dim gray", async () => {
     setColorEnabled(true);
     const out = await captureStdout(() =>
       printDms([{ id: "1", type: 1, recipients: [{ id: "u", username: "alice" }] }], false),
     );
-    expect(out).toContain("\x1b[96malice\x1b[0m");
-    expect(out).toContain("\x1b[93m1\x1b[0m");
+    expect(out).toContain("\x1b[96malice\x1b[0m"); // cyan label (the person)
+    expect(out).toContain("\x1b[90m1\x1b[0m"); // dim id (technical, recedes)
+  });
+
+  test("channels: category header pops (cyan ▸ + bold), name stays plain, id dims", async () => {
+    setColorEnabled(true);
+    const out = await captureStdout(() =>
+      printChannels(
+        [
+          { id: "9", name: "ENGINEERING", type: 4, position: 0 },
+          { id: "10", name: "deploys", type: 0, parent_id: "9", position: 0 },
+        ],
+        false,
+      ),
+    );
+    expect(out).toContain("\x1b[96m▸\x1b[0m"); // cyan section marker
+    expect(out).toContain("\x1b[1mENGINEERING\x1b[0m"); // bold category title
+    expect(out).toContain("deploys"); // channel name in default foreground
+    expect(out).toContain("\x1b[90m10\x1b[0m"); // dim channel id
   });
 });
 

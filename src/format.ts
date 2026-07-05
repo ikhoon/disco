@@ -4,7 +4,7 @@ import type { DiscordMessage, DiscordGuild, DiscordChannel } from "./types.ts";
 import { displayName, CHANNEL_TYPE } from "./types.ts";
 import { fmtTime, permalink } from "./util.ts";
 import { info } from "./log.ts";
-import { bold, dim, cyan, green, yellow } from "./color.ts";
+import { bold, dim, cyan, green } from "./color.ts";
 
 /** JSON-friendly, stable projection of a message. */
 export interface NormalizedMessage {
@@ -24,6 +24,16 @@ export interface NormalizedMessage {
 function excerpt(text: string, max = 120): string {
   const oneLine = text.replace(/\s+/g, " ").trim();
   return oneLine.length > max ? oneLine.slice(0, max - 1) + "…" : oneLine;
+}
+
+/**
+ * Pad `s` on the right to `width` terminal columns. Uses Bun.stringWidth so ANSI
+ * color codes (zero width) and wide glyphs (emoji, CJK count as 2) don't throw
+ * the columns off — lets us align id columns across colored, emoji-prefixed rows.
+ */
+function padVisible(s: string, width: number): string {
+  const pad = width - Bun.stringWidth(s);
+  return pad > 0 ? s + " ".repeat(pad) : s;
 }
 
 export function normalizeMessage(
@@ -74,7 +84,13 @@ export function printJson(payload: unknown): void {
 function renderMessage(m: NormalizedMessage): string {
   const lines: string[] = [];
   const edited = m.edited ? dim(" (edited)") : "";
-  lines.push(`[${green(fmtTime(m.ts))}] ${cyan(m.author.name)}${m.author.bot ? dim(" [bot]") : ""}:${edited}`);
+  // Show the @username alongside the display name when they differ — the display
+  // name is the primary identity (cyan), the handle is secondary (dim).
+  const handle =
+    m.author.username && m.author.username !== m.author.name ? dim(` (@${m.author.username})`) : "";
+  lines.push(
+    `[${green(fmtTime(m.ts))}] ${cyan(m.author.name)}${handle}${m.author.bot ? dim(" [bot]") : ""}:${edited}`,
+  );
   if (m.reply_to) {
     lines.push(`    ${dim(`↳ re: ${m.reply_to.author}: "${m.reply_to.excerpt}"`)}`);
   }
@@ -163,12 +179,18 @@ export function printChannels(channels: DiscordChannel[], json: boolean): void {
     channels
       .filter((c) => c.type !== 4 && (c.parent_id ?? null) === parentId)
       .sort((a, b) => pos(a) - pos(b));
-  const line = (c: DiscordChannel) => `  ${CHANNEL_ICON[c.type] ?? "#"} ${c.name ?? "(unnamed)"}  ${yellow(c.id)}`;
+  // Color encodes role: the channel name (what you read) stays in the terminal's
+  // default foreground and stands out because the type icon and the snowflake id
+  // around it recede to dim gray. The id column is aligned across all rows.
+  const nameCell = (c: DiscordChannel) => `${dim(CHANNEL_ICON[c.type] ?? "#")} ${c.name ?? "(unnamed)"}`;
+  const nameWidth = Math.max(0, ...channels.filter((c) => c.type !== 4).map((c) => Bun.stringWidth(nameCell(c))));
+  const line = (c: DiscordChannel) => `  ${padVisible(nameCell(c), nameWidth)}  ${dim(c.id)}`;
 
   const out: string[] = [];
   for (const c of childrenOf(null)) out.push(line(c)); // uncategorized first
   for (const cat of categories) {
-    out.push(`${out.length ? "\n" : ""}▸ ${bold(cat.name ?? "(category)")}`);
+    // Category = section header: a cyan marker + a bold title so the grouping pops.
+    out.push(`${out.length ? "\n" : ""}${cyan("▸")} ${bold(cat.name ?? "(category)")}`);
     for (const c of childrenOf(cat.id)) out.push(line(c));
   }
   process.stdout.write(out.join("\n") + "\n");
@@ -199,8 +221,10 @@ export function printDms(channels: DiscordChannel[], json: boolean): void {
     info("(no DMs)");
     return;
   }
+  const cell = (c: DiscordChannel) => `${dim(c.type === 3 ? "👥" : "@")} ${cyan(label(c))}`;
+  const width = Math.max(0, ...channels.map((c) => Bun.stringWidth(cell(c))));
   const rows = channels
-    .map((c) => `  ${c.type === 3 ? "👥" : "@"} ${cyan(label(c))}  ${yellow(c.id)}`)
+    .map((c) => `  ${padVisible(cell(c), width)}  ${dim(c.id)}`)
     .join("\n");
   process.stdout.write(rows + "\n");
 }
@@ -214,8 +238,10 @@ export function printGuilds(guilds: DiscordGuild[], json: boolean): void {
     info("(no guilds)");
     return;
   }
+  // Name first (what you scan for); the id follows in dim gray, aligned.
+  const width = Math.max(0, ...guilds.map((g) => Bun.stringWidth(g.name)));
   const rows = guilds
-    .map((g) => `  ${yellow(g.id)}  ${g.name}`)
+    .map((g) => `  ${padVisible(g.name, width)}  ${dim(g.id)}`)
     .join("\n");
   process.stdout.write(rows + "\n");
 }
