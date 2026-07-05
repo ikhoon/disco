@@ -56,6 +56,7 @@ Auth & config:
 Global options:
   --json              Machine-readable JSON: { "data": ... }  (for jq)
   --no-color          Disable colored output (also honors the NO_COLOR env var)
+  --no-nicks          Don't resolve server nicknames for authors (faster reads)
   -v, --verbose       Verbose request logging (stderr)
   -q, --quiet         Suppress info logs
   --bot               Treat the token as a bot token ("Bot " prefix)
@@ -193,6 +194,7 @@ async function main(argv: string[]): Promise<void> {
   }
 
   const json = args.flags.json === true;
+  const nicks = args.flags["no-nicks"] !== true; // resolve server nicknames unless opted out
 
   switch (command) {
     case "auth":
@@ -242,9 +244,9 @@ async function main(argv: string[]): Promise<void> {
         refresh: args.flags.refresh === true,
       });
       if (ref.messageId) {
-        return cmdMessage(client, ref.channelId, ref.messageId, { json, guildId: ref.guildId });
+        return cmdMessage(client, ref.channelId, ref.messageId, { json, guildId: ref.guildId, nicks });
       }
-      return cmdChannel(client, ref.channelId, { ...opts, json, guildId: ref.guildId });
+      return cmdChannel(client, ref.channelId, { ...opts, json, guildId: ref.guildId, nicks });
     }
 
     case "channel": {
@@ -261,13 +263,13 @@ async function main(argv: string[]): Promise<void> {
         defaultGuild: (await loadConfig()).default_guild,
         refresh: args.flags.refresh === true,
       });
-      return cmdChannel(client, ref.channelId, { ...opts, json, guildId: ref.guildId });
+      return cmdChannel(client, ref.channelId, { ...opts, json, guildId: ref.guildId, nicks });
     }
 
     case "thread": {
       const ref = refOrThrow(args._[1], "thread URL or ID");
       const limit = posInt(args.flags.limit, "limit");
-      return cmdThread(await needClient(args.flags), ref.channelId, { limit, json, guildId: ref.guildId });
+      return cmdThread(await needClient(args.flags), ref.channelId, { limit, json, guildId: ref.guildId, nicks });
     }
 
     case "message": {
@@ -287,7 +289,7 @@ async function main(argv: string[]): Promise<void> {
       if (!messageId) {
         throw new DiscordError(0, undefined, "need a message: pass a message URL, or `message <channelId> <messageId>`.");
       }
-      return cmdMessage(await needClient(args.flags), channelId, messageId, { json, guildId });
+      return cmdMessage(await needClient(args.flags), channelId, messageId, { json, guildId, nicks });
     }
 
     case "mention": {

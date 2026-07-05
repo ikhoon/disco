@@ -33,6 +33,17 @@ describe("normalizeMessage", () => {
     expect(n.author.bot).toBe(false);
   });
 
+  test("prefers a server nickname over the display name when provided", () => {
+    const n = normalizeMessage(base, "111", { u1: "Janey" });
+    expect(n.author.name).toBe("Janey"); // nick wins
+    expect(n.author.username).toBe("jane"); // handle still the real username
+  });
+
+  test("falls back to the display name when the author has no nickname", () => {
+    const n = normalizeMessage(base, "111", { someoneElse: "X" });
+    expect(n.author.name).toBe("Jane Doe");
+  });
+
   test("truncates reply excerpts at 120 chars and embed descriptions at 200", () => {
     const long = "x".repeat(500);
     const n = normalizeMessage({
