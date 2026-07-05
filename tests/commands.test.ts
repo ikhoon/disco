@@ -41,12 +41,12 @@ describe("cmdWhoami", () => {
     "/users/@me": () => ({ id: "710", username: "ikhoon", global_name: "ikhoon", email: "ih@example.com", ...over }),
   });
 
-  test("omits the @handle when it equals the display name, and aligns id/email", async () => {
+  test("omits the @handle when it equals the display name, emoji per item", async () => {
     const out = await captureStderr(() => cmdWhoami(fakeClient(route()), false));
     expect(out).toContain("👤  ikhoon  ·  user token");
     expect(out).not.toContain("(@ikhoon)"); // no redundant handle
-    expect(out).toMatch(/id\s+710/);
-    expect(out).toMatch(/email\s+ih@example\.com/);
+    expect(out).toContain("🆔  710");
+    expect(out).toContain("📧  ih@example.com");
   });
 
   test("shows the @handle when the display name differs from the username", async () => {

@@ -155,7 +155,7 @@ describe("colored output", () => {
     expect(out).toContain("\x1b[90m1\x1b[0m"); // dim id (technical, recedes)
   });
 
-  test("channels: category header pops (cyan ▸ + bold), name stays plain, id dims", async () => {
+  test("channels: cyan ▸ category + bold title, tight #text-channel (one color), dim id", async () => {
     setColorEnabled(true);
     const out = await captureStdout(() =>
       printChannels(
@@ -168,7 +168,8 @@ describe("colored output", () => {
     );
     expect(out).toContain("\x1b[96m▸\x1b[0m"); // cyan section marker
     expect(out).toContain("\x1b[1mENGINEERING\x1b[0m"); // bold category title
-    expect(out).toContain("deploys"); // channel name in default foreground
+    expect(out).toContain("#deploys"); // # shares the name's color (no separate dim on #)
+    expect(out).not.toContain("\x1b[90m#\x1b[0m"); // the # is not dimmed
     expect(out).toContain("\x1b[90m10\x1b[0m"); // dim channel id
   });
 });
