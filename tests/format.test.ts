@@ -171,16 +171,17 @@ describe("colored output", () => {
     expect(parseEnvelope(jsonOut).find((c: any) => c.name === "deploys").id).toBe("10"); // id still in --json
   });
 
-  test("channels: a topic shows dim inline (human) and in --json", async () => {
-    setColorEnabled(true);
+  test("channels: topics align into a column within a group, and appear in --json", async () => {
     const rows = [
       { id: "9", name: "ENG", type: 4, position: 0 },
       { id: "10", name: "deploys", type: 0, parent_id: "9", position: 0, topic: "release coordination" },
-      { id: "11", name: "backend", type: 0, parent_id: "9", position: 1 }, // no topic
+      { id: "11", name: "a", type: 0, parent_id: "9", position: 1, topic: "short name" },
     ];
     const out = await captureStdout(() => printChannels(rows, false));
-    expect(out).toContain("\x1b[90m—\x1b[0m release coordination"); // dim dash, readable topic
-    expect(out.split("\n").find((l) => l.includes("#backend"))).not.toContain("—"); // no topic → name only
+    const lines = out.split("\n").filter((l) => l.includes("release coordination") || l.includes("short name"));
+    // Both topics start at the same visible column (aligned to the widest name).
+    const col = (l: string, t: string) => Bun.stringWidth(l.slice(0, l.indexOf(t)));
+    expect(col(lines[0], "release coordination")).toBe(col(lines[1], "short name"));
 
     const jsonOut = await captureStdout(() => printChannels(rows, true));
     expect(parseEnvelope(jsonOut).find((c: any) => c.name === "deploys").topic).toBe("release coordination");
