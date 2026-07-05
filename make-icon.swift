@@ -65,6 +65,7 @@ func drawIcon(_ px: CGFloat) -> NSBitmapImageRep {
 }
 
 let outDir = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "AppIcon.iconset"
+try! FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
 let specs: [(String, Int)] = [
     ("16x16", 16), ("16x16@2x", 32), ("32x32", 32), ("32x32@2x", 64),
     ("128x128", 128), ("128x128@2x", 256), ("256x256", 256), ("256x256@2x", 512),

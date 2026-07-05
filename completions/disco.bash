@@ -34,6 +34,8 @@ _disco_complete() {
 
   local sub="${words[1]}"
   local common="--json --no-color --bot --verbose -v --quiet -q"
+  # User-token-only commands: the same set minus --bot.
+  local user_common="--json --no-color --verbose -v --quiet -q"
   local flags="$common"
 
   case "$sub" in
@@ -48,14 +50,14 @@ _disco_complete() {
       ;;
     mention)
       # User-token only; --bot doesn't apply.
-      flags="--json --no-color --verbose -v --quiet -q --after --since --guild --limit"
+      flags="$user_common --after --since --guild --limit"
       ;;
     search)
       flags="$common --guild --channel --count --sort"
       ;;
     dms)
       # User-token only; --bot doesn't apply.
-      flags="--json --no-color --verbose -v --quiet -q"
+      flags="$user_common"
       ;;
     auth)
       if [[ $cword -eq 2 && "$cur" != -* ]]; then

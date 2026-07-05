@@ -12,14 +12,18 @@ export function isVerbose(): boolean {
   return VERBOSE;
 }
 
+// info/debug write plain text via stderr.write: Bun's console.error paints
+// TTY stderr red, which makes routine progress lines look like failures.
+// warn keeps console.error so real problems do stand out in red.
+
 /** Trace-level; only with --verbose. */
 export function debug(...args: unknown[]): void {
-  if (VERBOSE) console.error("·", ...args);
+  if (VERBOSE) process.stderr.write("· " + args.map(String).join(" ") + "\n");
 }
 
 /** Progress/info; suppressed with --quiet. */
 export function info(...args: unknown[]): void {
-  if (!QUIET) console.error(...args);
+  if (!QUIET) process.stderr.write(args.map(String).join(" ") + "\n");
 }
 
 /** Warnings/errors; always shown. */

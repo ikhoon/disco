@@ -1,6 +1,5 @@
 node_modules/
 dist/
-assets/AppIcon.iconset/
 *.log
 .DS_Store
 *.bun-build

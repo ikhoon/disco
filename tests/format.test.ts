@@ -101,7 +101,8 @@ describe("colored output", () => {
   test("styles timestamp/author/permalink when color is on", async () => {
     setColorEnabled(true);
     const out = await captureStdout(() => printMessages([base], { json: false, guildId: "111" }));
-    expect(out).toContain("\x1b[92m2026-07-04"); // green timestamp
+    // fmtTime renders in local time, so match the shape, not the TZ-dependent value.
+    expect(out).toMatch(/\x1b\[92m\d{4}-\d{2}-\d{2} \d{2}:\d{2}\x1b\[0m/); // green timestamp
     expect(out).toContain("\x1b[96mJane Doe\x1b[0m"); // cyan author
     expect(out).toContain("\x1b[90mhttps://discord.com/channels/111/222/333\x1b[0m"); // dim permalink
   });
