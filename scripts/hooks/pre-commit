@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Blocks a commit that would add real Discord data (snowflake ids / non-example
+# emails). Install with:  bun run hooks:install   (sets core.hooksPath).
+exec bun run "$(git rev-parse --show-toplevel)/scripts/check-no-real-data.ts"
