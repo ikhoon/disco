@@ -5,6 +5,8 @@ import type { DiscordMessage, DiscordUser, DiscordGuild, DiscordChannel, SearchR
 import { displayName } from "./types.ts";
 import { printMessages, printGuilds, printChannels, printDms, printNormalized, printJson, normalizeMessage } from "./format.ts";
 import { info, debug, warn } from "./log.ts";
+import { storeCredential, type Credential } from "./auth.ts";
+import { captureUserToken, manualPasteToken, clipboardToken, BrowserNotFoundError } from "./capture.ts";
 
 const MAX_PER_PAGE = 100; // /channels/{id}/messages and /users/@me/mentions cap
 const SEARCH_PER_PAGE = 25; // search caps at 25
@@ -30,6 +32,66 @@ export async function cmdWhoami(client: DiscordClient, json: boolean): Promise<v
   const kind = client.isBot ? "bot" : "user";
   info(`Authenticated as ${displayName(me)} (@${me.username}) · id ${me.id} · token type: ${kind}`);
   if (me.email) info(`email: ${me.email}`);
+}
+
+// ---- auth login -------------------------------------------------------------
+
+export interface AuthLoginOpts {
+  json: boolean;
+  manual: boolean;
+  clipboard: boolean;
+  browserPath?: string;
+  bot: boolean;
+}
+
+/**
+ * `disco auth login` — obtain a USER token the easy way. Default: assisted
+ * browser capture (CDP). Fallbacks: `--manual` guided paste, `--clipboard`.
+ * All paths converge on `finishLogin` (validate via /users/@me, then store).
+ */
+export async function cmdAuthLogin(opts: AuthLoginOpts): Promise<void> {
+  if (opts.bot) {
+    throw new DiscordError(
+      0,
+      undefined,
+      "`auth login` captures a USER token from your browser. For a bot token, use `disco auth set --token <t> --bot`.",
+    );
+  }
+  // Reassure + stay honest: it's your own account and your own token.
+  info(
+    "This signs in with your own Discord account: the token stays on this machine, " +
+      "encrypted in the macOS Keychain, and disco only ever reads (never posts). " +
+      "Note: automating a user account is against Discord's ToS — use your own account at your own risk.",
+  );
+
+  let token: string;
+  if (opts.clipboard) {
+    token = await clipboardToken();
+  } else if (opts.manual) {
+    token = await manualPasteToken();
+  } else {
+    try {
+      token = await captureUserToken({ browserPath: opts.browserPath });
+    } catch (e) {
+      if (e instanceof BrowserNotFoundError) {
+        warn(`${e.message} — falling back to a manual paste.`);
+        token = await manualPasteToken();
+      } else {
+        throw e;
+      }
+    }
+  }
+  await finishLogin(token, opts.json);
+}
+
+/** Validate a freshly captured token, then store it. Reuses cmdWhoami + storeCredential. */
+async function finishLogin(raw: string, json: boolean): Promise<void> {
+  const token = raw.trim();
+  if (!token) throw new DiscordError(0, undefined, "no token captured.");
+  const cred: Credential = { token, bot: false };
+  await cmdWhoami(new DiscordClient(cred), json); // validates via /users/@me; throws on 401
+  await storeCredential(cred);
+  info("✓ logged in — token stored securely in the macOS Keychain.");
 }
 
 // ---- guilds -----------------------------------------------------------------
