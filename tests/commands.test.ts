@@ -154,6 +154,30 @@ describe("cmdMention", () => {
   });
 });
 
+describe("cmdChannel nicknames", () => {
+  test("resolves and shows each author's server nickname by default", async () => {
+    const m = msg("m1", "2026-07-01T00:00:00Z", "hi"); // author id u1, display "Jane"
+    const client = fakeClient({
+      "/channels/c1/messages": () => [m],
+      "/guilds/g1/members/u1": () => ({ nick: "Janey" }),
+    });
+    const out = await captureStdout(() =>
+      cmdChannel(client, "c1", { json: false, guildId: "g1", limit: 1, nicks: true }),
+    );
+    expect(out).toContain("Janey"); // server nick, matching the Discord app
+  });
+
+  test("--no-nicks (nicks:false) skips the member lookup and shows the display name", async () => {
+    const m = msg("m1", "2026-07-01T00:00:00Z", "hi");
+    // No member route: if it tried to fetch a nick, fakeClient would throw "unrouted".
+    const client = fakeClient({ "/channels/c1/messages": () => [m] });
+    const out = await captureStdout(() =>
+      cmdChannel(client, "c1", { json: false, guildId: "g1", limit: 1, nicks: false }),
+    );
+    expect(out).toContain("Jane");
+  });
+});
+
 describe("cmdChannel", () => {
   test("pages full batches with a before cursor and prints chronologically", async () => {
     // The walker only requests another page after a FULL batch (Discord's

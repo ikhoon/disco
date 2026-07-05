@@ -182,6 +182,47 @@ export interface ChannelOpts {
   since?: Date;
   json: boolean;
   guildId?: string | null;
+  /** Resolve server nicknames for authors (default on). */
+  nicks?: boolean;
+}
+
+// The Discord app shows each author's server nickname, but the REST message
+// payload omits it, so we fetch it per unique author. Bounded to keep a busy
+// channel's read from turning into hundreds of requests.
+const NICK_LOOKUP_CAP = 50;
+
+/** userId → server nickname, for authors that have one. Dedups; skips on error/cap. */
+async function fetchNicks(
+  client: DiscordClient,
+  guildId: string,
+  userIds: string[],
+): Promise<Record<string, string>> {
+  const unique = [...new Set(userIds.filter(Boolean))];
+  const nicks: Record<string, string> = {};
+  if (unique.length > NICK_LOOKUP_CAP) {
+    info(`(${unique.length} authors — skipping nickname lookup; pass --no-nicks to silence)`);
+    return nicks;
+  }
+  for (const uid of unique) {
+    try {
+      const m = await client.request<{ nick?: string | null }>(`/guilds/${guildId}/members/${uid}`);
+      if (m?.nick) nicks[uid] = m.nick;
+    } catch (e) {
+      debug(`  member ${uid} nick lookup skipped: ${(e as Error).message}`);
+    }
+  }
+  return nicks;
+}
+
+/** Resolve nicks for the authors of `msgs` unless disabled or outside a guild. */
+async function nicksFor(
+  client: DiscordClient,
+  guildId: string | null,
+  msgs: DiscordMessage[],
+  enabled?: boolean,
+): Promise<Record<string, string> | undefined> {
+  if (enabled === false || !guildId || msgs.length === 0) return undefined;
+  return fetchNicks(client, guildId, msgs.map((m) => m.author?.id ?? ""));
 }
 
 export async function cmdChannel(client: DiscordClient, channelId: string, opts: ChannelOpts): Promise<void> {
@@ -194,7 +235,8 @@ export async function cmdChannel(client: DiscordClient, channelId: string, opts:
   } else {
     info(`${msgs.length} message(s)`);
   }
-  printMessages(msgs, { json: opts.json, guildId });
+  const nicks = await nicksFor(client, guildId, msgs, opts.json ? false : opts.nicks);
+  printMessages(msgs, { json: opts.json, guildId, nicks });
 }
 
 export async function cmdThread(client: DiscordClient, channelId: string, opts: ChannelOpts): Promise<void> {
@@ -206,7 +248,8 @@ export async function cmdThread(client: DiscordClient, channelId: string, opts: 
   } else {
     info(`${msgs.length} message(s) in thread`);
   }
-  printMessages(msgs, { json: opts.json, guildId });
+  const nicks = await nicksFor(client, guildId, msgs, opts.json ? false : opts.nicks);
+  printMessages(msgs, { json: opts.json, guildId, nicks });
 }
 
 // ---- single message ---------------------------------------------------------
@@ -215,7 +258,7 @@ export async function cmdMessage(
   client: DiscordClient,
   channelId: string,
   messageId: string,
-  opts: { json: boolean; guildId?: string | null },
+  opts: { json: boolean; guildId?: string | null; nicks?: boolean },
 ): Promise<void> {
   let msg: DiscordMessage | undefined;
   if (client.isBot) {
@@ -231,7 +274,11 @@ export async function cmdMessage(
   if (!msg) {
     throw new DiscordError(404, undefined, "message not found (it may be deleted, or the token can't see it)");
   }
-  printMessages([msg], { json: opts.json, guildId: opts.guildId ?? null });
+  // Resolve the guild when it wasn't supplied (bare/2-arg form) so permalinks work
+  // and server nicknames can be looked up.
+  const guildId = opts.guildId ?? (await resolveGuildId(client, channelId));
+  const nicks = await nicksFor(client, guildId, [msg], opts.json ? false : opts.nicks);
+  printMessages([msg], { json: opts.json, guildId, nicks });
 }
 
 // ---- mentions ---------------------------------------------------------------
