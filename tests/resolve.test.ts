@@ -53,8 +53,8 @@ describe("resolveChannelRef", () => {
   });
 
   test("passes a bare snowflake through", async () => {
-    const ref = await resolveChannelRef("1087272728177942629", fakeClient({}));
-    expect(ref.channelId).toBe("1087272728177942629");
+    const ref = await resolveChannelRef("955123456789012345", fakeClient({}));
+    expect(ref.channelId).toBe("955123456789012345");
   });
 
   test('resolves "Server/channel" to the channel id', async () => {

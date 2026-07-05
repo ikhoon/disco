@@ -73,7 +73,7 @@ const CHANNELS: DiscordChannel[] = [
 /** A fake client so the real cmdWhoami formatter runs without touching the API. */
 const whoamiClient = {
   isBot: false,
-  request: async () => ({ id: "710681237492203571", username: "you", global_name: "you", email: "you@example.com" }),
+  request: async () => ({ id: "955100000000000001", username: "you", global_name: "you", email: "you@example.com" }),
 } as unknown as DiscordClient;
 
 const argv = Bun.argv.slice(2);

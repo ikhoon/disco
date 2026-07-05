@@ -16,7 +16,9 @@
     "install-local": "bun run build && mkdir -p \"$HOME/.local/bin\" && cp dist/disco \"$HOME/.local/bin/disco\"",
     "package-release": "scripts/package-release.sh",
     "make-icon": "swift make-icon.swift dist/AppIcon.iconset && cp dist/AppIcon.iconset/icon_512x512.png assets/disco-logo.png",
-    "demo": "PATH=\"$PWD/demo/bin:$PATH\" vhs demo/demo.tape"
+    "demo": "PATH=\"$PWD/demo/bin:$PATH\" vhs demo/demo.tape",
+    "check:privacy": "bun run scripts/check-no-real-data.ts",
+    "hooks:install": "chmod +x scripts/hooks/pre-commit && git config core.hooksPath scripts/hooks && echo 'pre-commit privacy guard installed'"
   },
   "dependencies": {},
   "devDependencies": {

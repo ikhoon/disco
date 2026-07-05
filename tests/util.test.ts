@@ -61,7 +61,7 @@ describe("parseTime", () => {
 
 describe("snowflakes", () => {
   test("snowflake → date → snowflake round-trips to the same instant", () => {
-    const id = "1102682965986258944";
+    const id = "955100000000000002";
     const date = snowflakeToDate(id);
     const back = snowflakeToDate(dateToSnowflake(date));
     expect(back.getTime()).toBe(date.getTime());
