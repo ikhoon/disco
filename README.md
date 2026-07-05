@@ -18,10 +18,10 @@
 </p>
 
 - ⚡ **Fast** — a single self-contained binary; no Node, no npm install.
-- 📖 **Read-only by design** — history, threads, single messages, mentions, search, DMs. It never posts.
+- 🔎 **Reference by name** — `disco read general`, `disco channels Scala`; no snowflake IDs to copy (resolutions are cached after the first lookup).
+- 👤 **Reads like the app** — server nicknames, channel topics, and link previews, in colored, aligned output (off automatically when piped / `--json`, or via `--no-color` / `NO_COLOR`).
 - 🤖 **Scriptable** — `--json` on every command emits `{ "data": ... }`; logs go to stderr so pipes stay clean.
-- 🎨 **Colored, readable output** — green timestamps, cyan authors, yellow IDs; off automatically when piped or with `--json`, or explicitly via `--no-color` / `NO_COLOR`.
-- 🧭 **Polite to Discord** — honors rate limits (429/202), never retries 401/403.
+- 📖 **Read-only & polite** — history, threads, single messages, mentions, search, DMs; never posts, honors rate limits (429/202), never retries 401/403.
 
 <p align="center">
   <img src="assets/demo-cli.gif" alt="disco CLI demo — mentions, search, channel list, and --json piped to jq" width="820">
@@ -41,15 +41,42 @@
 
 ## Contents
 
+- [Quick start](#quick-start) — what you can do, copy-paste
 - [Install](#install)
 - [Auth](#auth) — tokens and where they live
-- [Quick start](#quick-start) — copy-paste cheat sheet
 - [URLs, IDs, and time expressions](#urls-ids-and-time-expressions)
 - [Scripting with JSON](#scripting-with-json)
 - [Notes & limits](#notes--limits)
 - [Configuration](#configuration)
 - [Shell completion](#shell-completion)
 - [Development](#development)
+
+---
+
+## Quick start
+
+```bash
+# READ — by channel name (cached), a URL, or an id ─────────────────────
+disco read general                    # a channel by name (default server, else any)
+disco read "Scala/metaprogramming"    # or scope it: <server>/<channel>
+disco read <messageUrl>               # a single message (auto-detected)
+disco channel general --limit 50      # last 50 messages   (or --days 7, --since 2h)
+disco thread <threadUrl>              # a whole thread
+
+# INBOX & SEARCH (user token) ──────────────────────────────────────────
+disco mention --after 1d              # your recent mentions
+disco search "deploy failed" --guild Scala   # search a server (by name or id)
+
+# DISCOVER ─────────────────────────────────────────────────────────────
+disco guilds                          # your servers — owner 👑 + member counts
+disco channels Scala                  # a server's channels, grouped, with topics
+disco dms                             # your DM / group-DM channels
+disco whoami
+```
+
+Names resolve to the right channel/server, message authors show their **server
+nickname** (like the Discord app), and `--json` on any command gives jq-able
+output. Run `disco --help` for the full list with examples.
 
 ---
 
@@ -72,18 +99,7 @@ Download `disco-<version>-macos-arm64.zip` from
 [Releases](https://github.com/ikhoon/disco/releases), unzip it, and follow
 `README.txt` inside (clear the download quarantine, drop `disco` on your PATH).
 
-### From source
-
-Requires [Bun](https://bun.sh).
-
-```bash
-git clone https://github.com/ikhoon/disco ~/src/disco
-cd ~/src/disco
-bun run install-local     # builds a single binary → ~/.local/bin/disco
-disco completions --install   # optional: per-user shell completion
-```
-
-Or run without installing: `bun run src/index.ts --help`.
+(To build from source, see [Development](#development).)
 
 ---
 
@@ -111,7 +127,13 @@ Terms of Service on automating a user account (see the warning up top). The toke
 **never leaves your machine**: it's stored encrypted in the **macOS Keychain**
 (or read once from `DISCORD_TOKEN`), and `disco` is **read-only** — it never posts.
 
-### How `disco auth login` works
+Tokens rotate on password change / logout — re-run `disco auth login` if you
+start getting 401s.
+
+<details>
+<summary><b>How <code>disco auth login</code> works</b>, and the manual fallback</summary>
+
+<br>
 
 It launches a Chromium-family browser (Chrome / Chromium / Brave / Edge) against
 an **isolated throwaway profile** with remote debugging on, you log in yourself,
@@ -123,7 +145,7 @@ the browser. macOS only; if no supported browser is found it falls back to
 `--manual`. Auto-discovery covers Chrome, Chromium, Brave, and Edge — for
 anything else (Arc, Vivaldi, a custom install) pass `--browser-path "<binary>"`.
 
-### Getting a user token manually (the `--manual` path)
+**Getting a user token manually (the `--manual` path):**
 
 1. Open Discord in your **browser** (not the desktop app) and log in.
 2. Open DevTools (`Cmd+Opt+I`) → **Network** tab.
@@ -131,38 +153,7 @@ anything else (Arc, Vivaldi, a custom install) pass `--browser-path "<binary>"`.
    `discord.com/api`, and copy the value of the **`authorization`** request
    header. That raw value *is* your token (no `Bot ` prefix).
 
-Tokens rotate on password change / logout — re-run `disco auth login` if you
-start getting 401s.
-
----
-
-## Quick start
-
-```bash
-# READ ─────────────────────────────────────────────────────────────────
-disco read <url>                 # auto: message URL → single message, else channel
-disco channel <url|id> --days 7  # last 7 days of a channel (default)
-disco channel <url|id> --limit 50
-disco thread <url|id>            # all messages in a thread
-disco message <messageUrl>       # one message  (also: message <channelId> <messageId>)
-
-# INBOX (user token) ───────────────────────────────────────────────────
-disco mention                    # your mentions in the last 10 minutes
-disco mention --after 1d --json
-disco mention --since 2026-06-01T09:00 --guild <guildId>
-
-# SEARCH (user token) ──────────────────────────────────────────────────
-disco search "deploy failed"                       # across all your servers
-disco search "release" --guild <guildId> --count 25
-disco search "invoice" --channel <dmChannelId>     # search a DM (IDs: disco dms)
-disco search "bug" --sort relevance --json
-
-# DISCOVER ─────────────────────────────────────────────────────────────
-disco guilds                     # list servers (to get guild IDs)
-disco channels <guildId>         # list a server's channels (grouped by category)
-disco dms                        # list DM / group-DM channels + their IDs (user token)
-disco whoami
-```
+</details>
 
 ---
 
@@ -247,8 +238,17 @@ automatically).
 
 ## Development
 
+Build and install from source (requires [Bun](https://bun.sh)):
+
 ```bash
-bun run src/index.ts --help   # run from source
+git clone https://github.com/ikhoon/disco ~/src/disco
+cd ~/src/disco
+bun run install-local         # builds a single binary → ~/.local/bin/disco
+disco completions --install   # optional: per-user shell completion
+```
+
+```bash
+bun run src/index.ts --help   # run from source without installing
 bun run typecheck             # tsc --noEmit (src + tests)
 bun test                      # unit tests (client, commands, args, format, completions)
 bun run build                 # compile a single binary → dist/disco
