@@ -7,7 +7,7 @@ export interface Args {
   flags: Record<string, string | boolean>;
 }
 
-export const BOOL_FLAGS = new Set(["json", "verbose", "quiet", "bot", "help", "version", "simple", "install", "no-color", "manual", "clipboard"]);
+export const BOOL_FLAGS = new Set(["json", "verbose", "quiet", "bot", "help", "version", "simple", "install", "no-color", "manual", "clipboard", "refresh"]);
 export const SHORT: Record<string, string> = { v: "verbose", q: "quiet", h: "help", V: "version" };
 
 function coerceBool(v: string): boolean {

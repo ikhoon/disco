@@ -7,6 +7,7 @@ import { loadConfig, saveConfig, configPath } from "./config.ts";
 import { configureLog, warn, info } from "./log.ts";
 import { configureColor, stderrRed } from "./color.ts";
 import { parseRef, parseTime } from "./util.ts";
+import { resolveChannelRef } from "./resolve.ts";
 import { runCompletions } from "./completions.ts";
 import { parseArgs, str, posInt, type Args } from "./args.ts";
 import { VERSION } from "./version.ts";
@@ -30,8 +31,8 @@ const HELP = `disco ${VERSION} — Discord activity CLI
 Usage: disco <command> [options]
 
 Read commands:
-  read <url|id>       Auto-dispatch a Discord URL (message → single, else → channel)
-  channel <url|id>    Channel history         [--days N | --limit N] [--since T]
+  read <url|id|name>  Auto-dispatch a URL/ID, or a channel name ("example-channel", "Server/example-channel")
+  channel <url|id|name>  Channel history      [--days N | --limit N] [--since T]
   thread <url|id>     Thread messages         [--limit N]
   message <url>       Single message by link  (or: message <channelId> <messageId>)
   mention             Your recent mentions    [--after T | --since T] [--guild ID] [--limit N]  (user token)
@@ -62,6 +63,10 @@ Global options:
   -V, --version       Show version
 
 Time (T) accepts: 10m, 2h, 3d, 1w, or an ISO date (2026-06-01T09:00).
+
+Channel names (read/channel): "example-channel" or "Server/example-channel". The first lookup
+scans your servers; the result is cached to ~/.config/disco/channel-cache.json,
+so it's instant next time. Use --refresh to re-resolve (e.g. after a rename).
 
 Token: run \`disco auth login\` (easiest — opens the browser and captures your
   token into the macOS Keychain), set DISCORD_TOKEN, or run \`disco auth set\`.
@@ -222,32 +227,41 @@ async function main(argv: string[]): Promise<void> {
     }
 
     case "read": {
-      const ref = refOrThrow(args._[1], "URL or channel ID");
-      const client = await needClient(args.flags);
-      if (ref.messageId) {
-        return cmdMessage(client, ref.channelId, ref.messageId, { json, guildId: ref.guildId });
-      }
+      const input = args._.slice(1).join(" ").trim(); // join so unquoted "Server/channel" with spaces works
+      if (!input) throw new DiscordError(0, undefined, "missing a URL, channel ID, or name. See `disco --help`.");
+      // Validate flags before any network call so bad flags fail fast.
       const sinceR = str(args.flags.since);
-      return cmdChannel(client, ref.channelId, {
+      const opts = {
         days: posInt(args.flags.days, "days"),
         limit: posInt(args.flags.limit, "limit"),
         since: sinceR ? parseTime(sinceR) : undefined,
-        json,
-        guildId: ref.guildId,
+      };
+      const client = await needClient(args.flags);
+      const ref = await resolveChannelRef(input, client, {
+        defaultGuild: (await loadConfig()).default_guild,
+        refresh: args.flags.refresh === true,
       });
+      if (ref.messageId) {
+        return cmdMessage(client, ref.channelId, ref.messageId, { json, guildId: ref.guildId });
+      }
+      return cmdChannel(client, ref.channelId, { ...opts, json, guildId: ref.guildId });
     }
 
     case "channel": {
-      const ref = refOrThrow(args._[1], "channel URL or ID");
+      const input = args._.slice(1).join(" ").trim();
+      if (!input) throw new DiscordError(0, undefined, "missing a channel URL, ID, or name. See `disco --help`.");
       const since = str(args.flags.since);
       const opts = {
         days: posInt(args.flags.days, "days"),
         limit: posInt(args.flags.limit, "limit"),
         since: since ? parseTime(since) : undefined,
-        json,
-        guildId: ref.guildId,
       };
-      return cmdChannel(await needClient(args.flags), ref.channelId, opts);
+      const client = await needClient(args.flags);
+      const ref = await resolveChannelRef(input, client, {
+        defaultGuild: (await loadConfig()).default_guild,
+        refresh: args.flags.refresh === true,
+      });
+      return cmdChannel(client, ref.channelId, { ...opts, json, guildId: ref.guildId });
     }
 
     case "thread": {

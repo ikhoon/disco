@@ -80,11 +80,13 @@ assert_exit "auth login --manual with no tty exits 1" 1 "$DISCO" auth login --ma
 
 # Offline error paths (no network, no Keychain).
 assert_exit "unknown subcommand exits 2" 2 "$DISCO" frobnicate
-assert_exit "channel with unparseable ref exits 1" 1 "$DISCO" channel "not-a-url"
+# read/channel now treat a non-URL as a channel NAME (needs a token to look up) → no-token exit 1.
+assert_exit "channel by name without a token exits 1" 1 "$DISCO" channel "not-a-url"
 assert_exit "search without a query exits 1" 1 "$DISCO" search
 assert_exit "--days rejects a non-integer" 1 "$DISCO" channel 123456789012345678 --days nope
-out=$("$DISCO" channel "not-a-url" 2>&1)
-assert_match "unparseable ref names the input" 'could not parse "not-a-url"' "$out"
+# `message` still parses a ref (no name lookup), so it reports a parse error offline.
+out=$("$DISCO" message "not-a-url" 2>&1)
+assert_match "unparseable message ref names the input" 'could not parse "not-a-url"' "$out"
 
 echo
 echo "passed: $PASS  failed: $FAIL"
