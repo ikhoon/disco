@@ -12,9 +12,10 @@ export function isVerbose(): boolean {
   return VERBOSE;
 }
 
-// info/debug write plain text via stderr.write: Bun's console.error paints
-// TTY stderr red, which makes routine progress lines look like failures.
-// warn keeps console.error so real problems do stand out in red.
+// All three write plain text via stderr.write. We deliberately avoid
+// console.error: Bun paints the entire console.error line bright red on a TTY,
+// which makes routine logs look like failures and real errors look alarming.
+// Callers add their own restrained accent (e.g. a red "error:" label) via color.ts.
 
 /** Trace-level; only with --verbose. */
 export function debug(...args: unknown[]): void {
@@ -28,5 +29,5 @@ export function info(...args: unknown[]): void {
 
 /** Warnings/errors; always shown. */
 export function warn(...args: unknown[]): void {
-  console.error(...args);
+  process.stderr.write(args.map(String).join(" ") + "\n");
 }

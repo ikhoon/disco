@@ -46,3 +46,7 @@ export const dim = wrap("\x1b[90m");
 export const yellow = wrap("\x1b[93m");
 export const cyan = wrap("\x1b[96m");
 export const green = wrap("\x1b[92m");
+// Plain red (31), used only for a short "error:" label — not whole lines, which
+// read as alarming. Bun's console.error paints the entire line bright red, which
+// is why errors/warnings route through log.ts + this instead.
+export const red = wrap("\x1b[31m");
