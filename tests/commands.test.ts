@@ -96,7 +96,7 @@ describe("cmdDms", () => {
 
 describe("cmdGuilds", () => {
   test("returns and prints the guild list", async () => {
-    const guilds = [{ id: "1", name: "armeria" }];
+    const guilds = [{ id: "1", name: "Acme" }];
     let returned: any;
     const out = await captureStdout(async () => {
       returned = await cmdGuilds(fakeClient({ "/users/@me/guilds": () => guilds }), true);
