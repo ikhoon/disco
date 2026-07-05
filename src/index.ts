@@ -95,15 +95,16 @@ Channel names (read/channel): "general" or "Server/general". The first lookup
 scans your servers; the result is cached to ~/.config/disco/channel-cache.json,
 so it's instant next time. Use --refresh to re-resolve (e.g. after a rename).
 
-Token: run \`disco auth login\` (easiest — opens the browser and captures your
-  token into the macOS Keychain), set DISCORD_TOKEN, or run \`disco auth set\`.
-  A user token unlocks search + mentions + DMs (⚠️ self-bot use violates Discord ToS).
-  A bot token (--bot) only reads channels/threads/messages where the bot is present.
+Token — disco reads it from the macOS Keychain or the DISCORD_TOKEN env var.
+  Get one:
+    disco auth login     Sign in through the browser; saved to the Keychain (easiest)
+    disco auth set       Store a token you already have                      [--bot]
+    DISCORD_TOKEN=<t>    Use one for a single command, via the environment
 
-It's your own account and your own token: it stays on this machine, encrypted in
-the Keychain, and disco only ever reads. \`auth login\` just automates the manual
-step below — open Discord in the browser → DevTools → Network → copy the
-'authorization' request header value (used raw, no "Bot " prefix).
+  User token  →  search, mentions, DMs      ⚠️  self-bot use violates Discord ToS
+  Bot token   →  only channels/threads/messages the bot is a member of        [--bot]
+
+  It's your own account's token: stored encrypted, read-only — disco never posts.
 
 Config file: ${configPath()}
 `;
