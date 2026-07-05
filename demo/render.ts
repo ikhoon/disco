@@ -1,12 +1,14 @@
 // Demo renderer: feeds FICTIONAL fixture data through disco's real formatters
-// (src/format.ts + src/color.ts), so the recorded gif always matches what the
-// real binary prints — colors, layout, and --json schema included — without
-// ever touching the Discord API. Invoked via demo/bin/disco (on PATH during
-// `bun run demo`); see demo/demo.tape.
+// (src/format.ts + src/commands.ts + src/color.ts), so the recorded gif always
+// matches what the real binary prints — colors, gutter, embed cards, nicknames,
+// the --json schema — without ever touching the Discord API. Invoked via
+// demo/bin/disco (on PATH during `bun run demo`); see demo/demo.tape.
 
 import { setColorEnabled } from "../src/color.ts";
 import { printMessages, printChannels } from "../src/format.ts";
+import { cmdWhoami } from "../src/commands.ts";
 import { info } from "../src/log.ts";
+import type { DiscordClient } from "../src/client.ts";
 import type { DiscordMessage, DiscordChannel } from "../src/types.ts";
 
 setColorEnabled(true); // vhs records in a pty; force color for a stable gif
@@ -14,13 +16,17 @@ setColorEnabled(true); // vhs records in a pty; force color for a stable gif
 const GUILD = "111111111111111111";
 const CHAN = "222222222222222222";
 
+interface MsgOpts {
+  bot?: boolean;
+  embeds?: DiscordMessage["embeds"];
+}
 function msg(
   id: string,
   ts: string,
-  name: string,
   username: string,
+  globalName: string | null,
   content: string,
-  bot = false,
+  opts: MsgOpts = {},
 ): DiscordMessage {
   return {
     id,
@@ -30,64 +36,60 @@ function msg(
     type: 0,
     attachments: [],
     mentions: [],
-    author: { id: `9000000000000000${bot ? "2" : "1"}`, username, global_name: name, bot },
+    embeds: opts.embeds,
+    author: { id: `u_${username}`, username, global_name: globalName, bot: !!opts.bot },
   };
 }
 
-// Timestamps carry +09:00 so the gif shows the same clock times regardless of
-// the recording machine's locale drift (fmtTime renders local time).
-const MENTIONS = [
-  msg(
-    "333333333333333333",
-    "2026-07-04T08:41:12+09:00",
-    "Jane Doe",
-    "jane",
-    "@ikhoon deploy failed on main — can you take a look?",
-  ),
-  msg(
-    "333333333333333444",
-    "2026-07-04T08:55:03+09:00",
-    "CI Bot",
-    "cibot",
-    "build #1242 fixed by @ikhoon",
-    true,
-  ),
+// A channel conversation: shows the gutter, server nicknames, an @handle, a bot
+// tag, and a link-preview embed rendered as a dim 🔗 card. Timestamps carry
+// +09:00 so the clock reads the same regardless of the recording machine's locale.
+const CONVERSATION: DiscordMessage[] = [
+  msg("1", "2026-07-04T08:41:12+09:00", "annie_dev", null, "morning — anyone looking at the flaky retry test on main?"),
+  msg("2", "2026-07-04T08:43:05+09:00", "jkim", null, "yep, filed it with a repro:", {
+    embeds: [
+      {
+        title: "Flaky: RetryTest times out under load",
+        url: "https://example.com/issues/482",
+        description:
+          "The retry test intermittently exceeds the 5s deadline when the CI runner is busy; raising the timeout hides it rather than fixing the race.",
+      },
+    ],
+  }),
+  msg("3", "2026-07-04T08:55:03+09:00", "ci", "CI", "build #1242 is green again", { bot: true }),
 ];
-
-const SEARCH = [
-  MENTIONS[0],
-  msg(
-    "333333333333333222",
-    "2026-07-03T17:20:41+09:00",
-    "Alex Kim",
-    "alexk",
-    "deploy failed twice on staging — rollback went out, postmortem doc in the thread",
-  ),
-];
+// Server nicknames (what the Discord app shows) — keyed by author id.
+const NICKS: Record<string, string> = { u_annie_dev: "annie", u_jkim: "jaykim" };
 
 const CHANNELS: DiscordChannel[] = [
   { id: "222222222222222200", name: "welcome", type: 0, position: 0 },
   { id: "222222222222222299", name: "ENGINEERING", type: 4, position: 1 },
-  { id: CHAN, name: "deploys", type: 0, parent_id: "222222222222222299", position: 0 },
+  { id: CHAN, name: "general", type: 0, parent_id: "222222222222222299", position: 0 },
   { id: "222222222222222223", name: "backend", type: 0, parent_id: "222222222222222299", position: 1 },
   { id: "222222222222222224", name: "release-1-42", type: 11, parent_id: "222222222222222299", position: 2 },
+  { id: "222222222222222225", name: "standup", type: 2, parent_id: "222222222222222299", position: 3 },
 ];
+
+/** A fake client so the real cmdWhoami formatter runs without touching the API. */
+const whoamiClient = {
+  isBot: false,
+  request: async () => ({ id: "955100000000000001", username: "you", global_name: "you", email: "you@example.com" }),
+} as unknown as DiscordClient;
 
 const argv = Bun.argv.slice(2);
 const json = argv.includes("--json");
 
 switch (argv[0]) {
-  case "mention":
-    info("2 mention(s) since 2026-07-04T07:00:00.000Z");
-    printMessages(MENTIONS, { json, guildId: GUILD });
-    break;
-  case "search":
-    info(`2 of 2 result(s) in guild ${GUILD}`);
-    printMessages(SEARCH, { json, guildId: GUILD });
+  case "read":
+    info("3 message(s)");
+    printMessages(CONVERSATION, { json, guildId: GUILD, nicks: json ? undefined : NICKS });
     break;
   case "channels":
-    info(`5 channel(s) in guild ${GUILD}`);
+    info(`${CHANNELS.length} channels`);
     printChannels(CHANNELS, json);
+    break;
+  case "whoami":
+    await cmdWhoami(whoamiClient, json);
     break;
   default:
     console.error(`disco: (demo mock) unhandled command: ${argv.join(" ")}`);
