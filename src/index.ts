@@ -30,6 +30,32 @@ const HELP = `disco ${VERSION} — Discord activity CLI
 
 Usage: disco <command> [options]
 
+Examples:
+  Sign in (opens the browser, stores the token in the Keychain):
+    $ disco auth login
+
+  Read a channel by name or URL (names are cached after the first lookup):
+    $ disco read general
+    $ disco read "Team/general"
+    $ disco read https://discord.com/channels/<guild>/<channel>
+
+  Last N messages, or a time window:
+    $ disco channel general --limit 50
+    $ disco channel general --since 2h
+
+  One message, or a whole thread:
+    $ disco message <messageUrl>
+    $ disco thread <threadUrl>
+
+  Your mentions and search (user token):
+    $ disco mention --after 1d
+    $ disco search "deploy failed" --guild <guildId>
+
+  Discover ids, and pipe JSON to jq:
+    $ disco guilds
+    $ disco channels <guildId>
+    $ disco channel general --json | jq '.data[].content'
+
 Read commands:
   read <url|id|name>  Auto-dispatch a URL/ID, or a channel name ("general", "Server/general")
   channel <url|id|name>  Channel history      [--days N | --limit N] [--since T]
@@ -62,32 +88,6 @@ Global options:
   --bot               Treat the token as a bot token ("Bot " prefix)
   -h, --help          Show help
   -V, --version       Show version
-
-Examples:
-  Sign in (opens the browser, stores the token in the Keychain):
-    $ disco auth login
-
-  Read a channel by name or URL (names are cached after the first lookup):
-    $ disco read general
-    $ disco read "Team/general"
-    $ disco read https://discord.com/channels/<guild>/<channel>
-
-  Last N messages, or a time window:
-    $ disco channel general --limit 50
-    $ disco channel general --since 2h
-
-  One message, or a whole thread:
-    $ disco message <messageUrl>
-    $ disco thread <threadUrl>
-
-  Your mentions and search (user token):
-    $ disco mention --after 1d
-    $ disco search "deploy failed" --guild <guildId>
-
-  Discover ids, and pipe JSON to jq:
-    $ disco guilds
-    $ disco channels <guildId>
-    $ disco channel general --json | jq '.data[].content'
 
 Time (T) accepts: 10m, 2h, 3d, 1w, or an ISO date (2026-06-01T09:00).
 
