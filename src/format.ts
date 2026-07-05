@@ -39,16 +39,19 @@ function padVisible(s: string, width: number): string {
 export function normalizeMessage(
   msg: DiscordMessage,
   guildId: string | null = null,
+  nicks?: Record<string, string>,
 ): NormalizedMessage {
   const ref = msg.referenced_message ?? null;
+  const authorId = msg.author?.id ?? "";
   return {
     id: msg.id,
     ts: msg.timestamp,
     guild_id: guildId,
     channel_id: msg.channel_id,
     author: {
-      id: msg.author?.id ?? "",
-      name: msg.author ? displayName(msg.author) : "(unknown)",
+      id: authorId,
+      // Prefer the server nickname (what the Discord app shows) when we have it.
+      name: nicks?.[authorId] ?? (msg.author ? displayName(msg.author) : "(unknown)"),
       username: msg.author?.username ?? "",
       bot: !!msg.author?.bot,
     },
@@ -115,9 +118,9 @@ function renderMessage(m: NormalizedMessage): string {
 /** Print a list of messages, either as JSON or human-readable blocks. */
 export function printMessages(
   msgs: DiscordMessage[],
-  opts: { json: boolean; guildId?: string | null },
+  opts: { json: boolean; guildId?: string | null; nicks?: Record<string, string> },
 ): void {
-  const normalized = msgs.map((m) => normalizeMessage(m, opts.guildId ?? null));
+  const normalized = msgs.map((m) => normalizeMessage(m, opts.guildId ?? null, opts.nicks));
   if (opts.json) {
     printJson(normalized);
     return;
