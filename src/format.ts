@@ -190,24 +190,28 @@ export function printChannels(channels: DiscordChannel[], json: boolean): void {
     channels
       .filter((c) => c.type !== 4 && (c.parent_id ?? null) === parentId)
       .sort((a, b) => pos(a) - pos(b));
-  // Read like Discord's sidebar: names grouped under their categories — text as
-  // the tight `#channel`, richer types with an emoji — followed by the channel's
-  // topic in dim gray so you can see what each is for. (ids live only in --json.)
-  const line = (c: DiscordChannel) => {
+  // Read like Discord's sidebar. To tell name from topic at a glance, the channel
+  // name is cyan and the topic is the plain default foreground, joined by a dim
+  // dash and aligned into a column WITHIN each group. (ids live only in --json.)
+  const cell = (c: DiscordChannel) => {
     const nm = c.name ?? "(unnamed)";
-    const marker = c.type === 0 ? `#${nm}` : `${CHANNEL_ICON[c.type] ?? "#"} ${nm}`;
-    // Topic stays in the readable default foreground (it's useful info); only the
-    // dash separator is dim, so it reads as a subtitle without straining to see.
-    const topic = c.topic ? `  ${dim("—")} ${excerpt(c.topic, 60)}` : "";
-    return `    ${marker}${topic}`;
+    return c.type === 0 ? cyan(`#${nm}`) : `${CHANNEL_ICON[c.type] ?? "#"} ${cyan(nm)}`;
+  };
+  const renderGroup = (chs: DiscordChannel[]): string[] => {
+    // Column start = the widest name among this group's channels that have a topic.
+    const width = Math.max(0, ...chs.filter((c) => c.topic).map((c) => Bun.stringWidth(cell(c))));
+    return chs.map((c) =>
+      c.topic ? `    ${padVisible(cell(c), width)}  ${dim("—")} ${excerpt(c.topic, 60)}` : `    ${cell(c)}`,
+    );
   };
 
   const out: string[] = [];
-  for (const c of childrenOf(null)) out.push(line(c)); // uncategorized first
+  const uncategorized = childrenOf(null);
+  if (uncategorized.length) out.push(...renderGroup(uncategorized));
   for (const cat of categories) {
     // Category = section header: a cyan marker + a bold title so the grouping pops.
     out.push(`${out.length ? "\n" : ""}${cyan("▸")} ${bold(cat.name ?? "(category)")}`);
-    for (const c of childrenOf(cat.id)) out.push(line(c));
+    out.push(...renderGroup(childrenOf(cat.id)));
   }
   process.stdout.write(out.join("\n") + "\n");
 }
