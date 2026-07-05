@@ -1,6 +1,6 @@
 {
   "name": "disco",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Discord activity CLI — read channels, threads, mentions, and search from the terminal",
   "repository": "github:ikhoon/disco",
   "license": "MIT",
