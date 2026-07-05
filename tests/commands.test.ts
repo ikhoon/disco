@@ -95,14 +95,24 @@ describe("cmdDms", () => {
 });
 
 describe("cmdGuilds", () => {
-  test("returns and prints the guild list", async () => {
-    const guilds = [{ id: "1", name: "Acme" }];
+  test("requests member counts and prints the guild list", async () => {
+    const guilds = [{ id: "1", name: "Acme", owner: true, approximate_member_count: 1234 }];
     let returned: any;
+    let sawWithCounts = false;
     const out = await captureStdout(async () => {
-      returned = await cmdGuilds(fakeClient({ "/users/@me/guilds": () => guilds }), true);
+      returned = await cmdGuilds(
+        fakeClient({
+          "/users/@me/guilds": (_p, opts) => {
+            sawWithCounts = opts.query?.with_counts === true;
+            return guilds;
+          },
+        }),
+        true,
+      );
     });
-    expect(returned).toEqual(guilds);
-    expect(parseEnvelope(out)).toEqual(guilds);
+    expect(sawWithCounts).toBe(true); // ?with_counts=true so member counts come back
+    expect(returned).toEqual(guilds); // raw pass-through unchanged
+    expect(parseEnvelope(out)).toEqual([{ id: "1", name: "Acme", owner: true, member_count: 1234 }]);
   });
 });
 
