@@ -5,20 +5,77 @@
 // A URL or snowflake resolves with no network calls; a name lists your servers
 // and their channels to find the match.
 
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { DiscordClient, DiscordError } from "./client.ts";
 import type { DiscordGuild, DiscordChannel } from "./types.ts";
 import { parseRef, type DiscordRef } from "./util.ts";
 import { debug, info } from "./log.ts";
 
+// Name→channel resolutions are cached to a local file: channels change rarely, so
+// a bare name that fanned out across every server the first time is instant after.
+const DEFAULT_CACHE_PATH = join(homedir(), ".config", "disco", "channel-cache.json");
+
+type CacheEntry = { guildId: string | null; channelId: string };
+
+function loadCache(path: string): Record<string, CacheEntry> {
+  try {
+    const data = JSON.parse(readFileSync(path, "utf8"));
+    return data && typeof data === "object" ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveCache(path: string, cache: Record<string, CacheEntry>): void {
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify(cache, null, 2) + "\n");
+  } catch {
+    /* best effort — a missing cache just means the next lookup re-fetches */
+  }
+}
+
+export interface ResolveOpts {
+  defaultGuild?: string;
+  /** Ignore (and overwrite) any cached entry for this name. */
+  refresh?: boolean;
+  /** Override the cache file location (tests). */
+  cachePath?: string;
+}
+
 /** Resolve `input` to a channel ref, looking it up by name when it isn't a URL/ID. */
 export async function resolveChannelRef(
   input: string,
   client: DiscordClient,
-  defaultGuild?: string,
+  opts: ResolveOpts = {},
 ): Promise<DiscordRef> {
+  const { defaultGuild, refresh = false, cachePath = DEFAULT_CACHE_PATH } = opts;
+
   // 1. A URL or bare snowflake resolves directly — no lookup.
   const direct = parseRef(input);
   if (direct) return direct;
+
+  // A URL-looking input that parseRef couldn't handle is a malformed link, not a
+  // channel name — say so instead of trying to look up a "server" like the host.
+  if (/^https?:\/\//i.test(input) || input.includes("discord.com/")) {
+    throw new DiscordError(
+      0,
+      undefined,
+      `could not parse "${input}" as a Discord URL — expected .../channels/<guild>/<channel>[/<message>].`,
+    );
+  }
+
+  // 2. A previously-resolved name returns instantly from the local cache.
+  const cacheKey = input.trim().toLowerCase();
+  if (!refresh) {
+    const hit = loadCache(cachePath)[cacheKey];
+    if (hit) {
+      debug(`resolved "${cacheKey}" from cache → ${hit.channelId}`);
+      return { guildId: hit.guildId, channelId: hit.channelId };
+    }
+  }
 
   if (client.isBot) {
     throw new DiscordError(
@@ -28,7 +85,7 @@ export async function resolveChannelRef(
     );
   }
 
-  // 2. Split "server/channel" on the LAST slash (server names may contain spaces,
+  // 3. Split "server/channel" on the LAST slash (server names may contain spaces,
   //    not slashes). A leading '#' on the channel is accepted and stripped.
   const slash = input.lastIndexOf("/");
   const guildQuery = (slash >= 0 ? input.slice(0, slash) : "").trim().toLowerCase();
@@ -37,7 +94,7 @@ export async function resolveChannelRef(
     throw new DiscordError(0, undefined, `could not read "${input}" as a URL, ID, or channel name.`);
   }
 
-  // 3. Choose which server(s) to search.
+  // 4. Choose which server(s) to search.
   const guilds = await client.request<DiscordGuild[]>("/users/@me/guilds", { query: { limit: 200 } });
   let searchIn: DiscordGuild[];
   if (guildQuery) {
@@ -53,7 +110,7 @@ export async function resolveChannelRef(
     }
   }
 
-  // 4. Collect channels named channelQuery (case-insensitive), skipping categories.
+  // 5. Collect channels named channelQuery (case-insensitive), skipping categories.
   const matches: { guild: DiscordGuild; channel: DiscordChannel }[] = [];
   for (const g of searchIn) {
     let channels: DiscordChannel[];
@@ -84,5 +141,10 @@ export async function resolveChannelRef(
       `"#${channelQuery}" matches ${matches.length} channels — narrow it with "server/${channelQuery}" or a channel id:\n${list}`,
     );
   }
-  return { guildId: matches[0].guild.id, channelId: matches[0].channel.id };
+  const ref = { guildId: matches[0].guild.id, channelId: matches[0].channel.id };
+  // 6. Remember it so this name resolves instantly next time.
+  const cache = loadCache(cachePath);
+  cache[cacheKey] = ref;
+  saveCache(cachePath, cache);
+  return ref;
 }

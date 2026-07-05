@@ -64,6 +64,10 @@ Global options:
 
 Time (T) accepts: 10m, 2h, 3d, 1w, or an ISO date (2026-06-01T09:00).
 
+Channel names (read/channel): "example-channel" or "Server/example-channel". The first lookup
+scans your servers; the result is cached to ~/.config/disco/channel-cache.json,
+so it's instant next time. Use --refresh to re-resolve (e.g. after a rename).
+
 Token: run \`disco auth login\` (easiest — opens the browser and captures your
   token into the macOS Keychain), set DISCORD_TOKEN, or run \`disco auth set\`.
   A user token unlocks search + mentions + DMs (⚠️ self-bot use violates Discord ToS).
@@ -225,35 +229,39 @@ async function main(argv: string[]): Promise<void> {
     case "read": {
       const input = args._.slice(1).join(" ").trim(); // join so unquoted "Server/channel" with spaces works
       if (!input) throw new DiscordError(0, undefined, "missing a URL, channel ID, or name. See `disco --help`.");
-      const client = await needClient(args.flags);
-      const ref = await resolveChannelRef(input, client, (await loadConfig()).default_guild);
-      if (ref.messageId) {
-        return cmdMessage(client, ref.channelId, ref.messageId, { json, guildId: ref.guildId });
-      }
+      // Validate flags before any network call so bad flags fail fast.
       const sinceR = str(args.flags.since);
-      return cmdChannel(client, ref.channelId, {
+      const opts = {
         days: posInt(args.flags.days, "days"),
         limit: posInt(args.flags.limit, "limit"),
         since: sinceR ? parseTime(sinceR) : undefined,
-        json,
-        guildId: ref.guildId,
+      };
+      const client = await needClient(args.flags);
+      const ref = await resolveChannelRef(input, client, {
+        defaultGuild: (await loadConfig()).default_guild,
+        refresh: args.flags.refresh === true,
       });
+      if (ref.messageId) {
+        return cmdMessage(client, ref.channelId, ref.messageId, { json, guildId: ref.guildId });
+      }
+      return cmdChannel(client, ref.channelId, { ...opts, json, guildId: ref.guildId });
     }
 
     case "channel": {
       const input = args._.slice(1).join(" ").trim();
       if (!input) throw new DiscordError(0, undefined, "missing a channel URL, ID, or name. See `disco --help`.");
       const since = str(args.flags.since);
-      const client = await needClient(args.flags);
-      const ref = await resolveChannelRef(input, client, (await loadConfig()).default_guild);
       const opts = {
         days: posInt(args.flags.days, "days"),
         limit: posInt(args.flags.limit, "limit"),
         since: since ? parseTime(since) : undefined,
-        json,
-        guildId: ref.guildId,
       };
-      return cmdChannel(client, ref.channelId, opts);
+      const client = await needClient(args.flags);
+      const ref = await resolveChannelRef(input, client, {
+        defaultGuild: (await loadConfig()).default_guild,
+        refresh: args.flags.refresh === true,
+      });
+      return cmdChannel(client, ref.channelId, { ...opts, json, guildId: ref.guildId });
     }
 
     case "thread": {
