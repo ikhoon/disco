@@ -5,7 +5,7 @@ import { DiscordClient, DiscordError } from "./client.ts";
 import { resolveCredential, storeCredential, clearCredential, type Credential } from "./auth.ts";
 import { loadConfig, saveConfig, configPath } from "./config.ts";
 import { configureLog, warn, info } from "./log.ts";
-import { configureColor } from "./color.ts";
+import { configureColor, stderrRed } from "./color.ts";
 import { parseRef, parseTime } from "./util.ts";
 import { runCompletions } from "./completions.ts";
 import { parseArgs, str, posInt, type Args } from "./args.ts";
@@ -315,10 +315,10 @@ async function main(argv: string[]): Promise<void> {
 }
 
 main(Bun.argv.slice(2)).catch((err) => {
-  if (err instanceof DiscordError) {
-    warn(`error: ${err.message}`);
-  } else {
-    warn(`error: ${err?.message ?? err}`);
-  }
+  // Just the "error:" label in red — not the whole line (Bun's console.error
+  // full-line red reads as alarming). stderrRed gates on stderr's own TTY, so a
+  // redirected 2>file stays free of escape codes.
+  const message = err instanceof DiscordError ? err.message : (err?.message ?? String(err));
+  warn(`${stderrRed("error:")} ${message}`);
   process.exitCode = 1;
 });
