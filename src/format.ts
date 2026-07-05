@@ -71,7 +71,8 @@ export function normalizeMessage(
     reply_to: ref
       ? {
           id: ref.id,
-          author: ref.author ? displayName(ref.author) : "(unknown)",
+          // Prefer the nickname here too, so the same person isn't shown under two names.
+          author: ref.author ? (nicks?.[ref.author.id] ?? displayName(ref.author)) : "(unknown)",
           excerpt: excerpt(ref.content ?? ""),
         }
       : null,

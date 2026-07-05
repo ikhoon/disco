@@ -235,7 +235,7 @@ export async function cmdChannel(client: DiscordClient, channelId: string, opts:
   } else {
     info(`${msgs.length} message(s)`);
   }
-  const nicks = await nicksFor(client, guildId, msgs, opts.nicks);
+  const nicks = await nicksFor(client, guildId, msgs, opts.json ? false : opts.nicks);
   printMessages(msgs, { json: opts.json, guildId, nicks });
 }
 
@@ -248,7 +248,7 @@ export async function cmdThread(client: DiscordClient, channelId: string, opts: 
   } else {
     info(`${msgs.length} message(s) in thread`);
   }
-  const nicks = await nicksFor(client, guildId, msgs, opts.nicks);
+  const nicks = await nicksFor(client, guildId, msgs, opts.json ? false : opts.nicks);
   printMessages(msgs, { json: opts.json, guildId, nicks });
 }
 
@@ -277,7 +277,7 @@ export async function cmdMessage(
   // Resolve the guild when it wasn't supplied (bare/2-arg form) so permalinks work
   // and server nicknames can be looked up.
   const guildId = opts.guildId ?? (await resolveGuildId(client, channelId));
-  const nicks = await nicksFor(client, guildId, [msg], opts.nicks);
+  const nicks = await nicksFor(client, guildId, [msg], opts.json ? false : opts.nicks);
   printMessages([msg], { json: opts.json, guildId, nicks });
 }
 
