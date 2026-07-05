@@ -21,6 +21,15 @@ const files = (await $`git ls-files -- src tests demo completions scripts README
   .split("\n")
   .filter((f) => f && f !== SELF);
 
+// Optional LOCAL denylist of real names/substrings that must never appear in
+// tracked files (case-insensitive). It is gitignored, so the names themselves are
+// never committed; when absent (e.g. in CI) the name check is skipped and the
+// id/email checks still run. The pre-commit / Claude hooks run where it exists.
+const denyFile = Bun.file(".privacy-denylist.txt");
+const denyTerms = (await denyFile.exists())
+  ? (await denyFile.text()).split("\n").map((s) => s.trim().toLowerCase()).filter((s) => s && !s.startsWith("#"))
+  : [];
+
 const problems: string[] = [];
 for (const f of files) {
   const lines = (await Bun.file(f).text()).split("\n");
@@ -30,6 +39,14 @@ for (const f of files) {
     }
     for (const m of line.matchAll(EMAIL)) {
       if (!isAllowedEmail(m[0])) problems.push(`${f}:${i + 1}  non-example email: ${m[0]}`);
+    }
+    if (denyTerms.length) {
+      const lower = line.toLowerCase();
+      // Don't echo the matched term — keeps the real name out of any CI/terminal
+      // log; the file:line is enough to find and fix it.
+      for (const term of denyTerms) {
+        if (lower.includes(term)) problems.push(`${f}:${i + 1}  matches a forbidden name (see .privacy-denylist.txt)`);
+      }
     }
   });
 }
