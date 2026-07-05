@@ -69,6 +69,15 @@ assert_match "completions --shell bash emits complete -F" "complete -F _disco_co
 assert_match "bash completion keeps \${COMP_WORDS} literal" 'cur="${COMP_WORDS[COMP_CWORD]}"' "$out"
 assert_exit "completions --shell fish fails" 1 "$DISCO" completions --shell fish
 
+# auth login is advertised and its offline guards fire without a network call.
+help=$("$DISCO" --help 2>&1)
+assert_match "--help lists 'auth login'" "auth login" "$help"
+assert_exit "auth login --bot is rejected (user-only)" 1 "$DISCO" auth login --bot
+out=$("$DISCO" auth login --bot 2>&1)
+assert_match "auth login --bot names the user-only reason" "captures a USER token" "$out"
+# --manual with no terminal to read from must fail fast, not hang.
+assert_exit "auth login --manual with no tty exits 1" 1 "$DISCO" auth login --manual </dev/null
+
 # Offline error paths (no network, no Keychain).
 assert_exit "unknown subcommand exits 2" 2 "$DISCO" frobnicate
 assert_exit "channel with unparseable ref exits 1" 1 "$DISCO" channel "not-a-url"

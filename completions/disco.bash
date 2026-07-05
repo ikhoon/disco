@@ -24,6 +24,10 @@ _disco_complete() {
       # Free-form values (numbers, times, snowflake IDs, secrets); no completion.
       return
       ;;
+    --browser-path)
+      COMPREPLY=( $(compgen -f -- "$cur") )
+      return
+      ;;
   esac
 
   # Subcommand position.
@@ -61,10 +65,10 @@ _disco_complete() {
       ;;
     auth)
       if [[ $cword -eq 2 && "$cur" != -* ]]; then
-        COMPREPLY=( $(compgen -W "status set clear" -- "$cur") )
+        COMPREPLY=( $(compgen -W "status login set clear" -- "$cur") )
         return
       fi
-      flags="--token --bot --json --no-color"
+      flags="--token --manual --clipboard --browser-path --bot --json --no-color"
       ;;
     config)
       if [[ $cword -eq 2 && "$cur" != -* ]]; then
