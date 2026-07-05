@@ -7,6 +7,7 @@ import { loadConfig, saveConfig, configPath } from "./config.ts";
 import { configureLog, warn, info } from "./log.ts";
 import { configureColor, stderrRed } from "./color.ts";
 import { parseRef, parseTime } from "./util.ts";
+import { resolveChannelRef } from "./resolve.ts";
 import { runCompletions } from "./completions.ts";
 import { parseArgs, str, posInt, type Args } from "./args.ts";
 import { VERSION } from "./version.ts";
@@ -30,8 +31,8 @@ const HELP = `disco ${VERSION} — Discord activity CLI
 Usage: disco <command> [options]
 
 Read commands:
-  read <url|id>       Auto-dispatch a Discord URL (message → single, else → channel)
-  channel <url|id>    Channel history         [--days N | --limit N] [--since T]
+  read <url|id|name>  Auto-dispatch a URL/ID, or a channel name ("example-channel", "Server/example-channel")
+  channel <url|id|name>  Channel history      [--days N | --limit N] [--since T]
   thread <url|id>     Thread messages         [--limit N]
   message <url>       Single message by link  (or: message <channelId> <messageId>)
   mention             Your recent mentions    [--after T | --since T] [--guild ID] [--limit N]  (user token)
@@ -222,8 +223,10 @@ async function main(argv: string[]): Promise<void> {
     }
 
     case "read": {
-      const ref = refOrThrow(args._[1], "URL or channel ID");
+      const input = args._.slice(1).join(" ").trim(); // join so unquoted "Server/channel" with spaces works
+      if (!input) throw new DiscordError(0, undefined, "missing a URL, channel ID, or name. See `disco --help`.");
       const client = await needClient(args.flags);
+      const ref = await resolveChannelRef(input, client, (await loadConfig()).default_guild);
       if (ref.messageId) {
         return cmdMessage(client, ref.channelId, ref.messageId, { json, guildId: ref.guildId });
       }
@@ -238,8 +241,11 @@ async function main(argv: string[]): Promise<void> {
     }
 
     case "channel": {
-      const ref = refOrThrow(args._[1], "channel URL or ID");
+      const input = args._.slice(1).join(" ").trim();
+      if (!input) throw new DiscordError(0, undefined, "missing a channel URL, ID, or name. See `disco --help`.");
       const since = str(args.flags.since);
+      const client = await needClient(args.flags);
+      const ref = await resolveChannelRef(input, client, (await loadConfig()).default_guild);
       const opts = {
         days: posInt(args.flags.days, "days"),
         limit: posInt(args.flags.limit, "limit"),
@@ -247,7 +253,7 @@ async function main(argv: string[]): Promise<void> {
         json,
         guildId: ref.guildId,
       };
-      return cmdChannel(await needClient(args.flags), ref.channelId, opts);
+      return cmdChannel(client, ref.channelId, opts);
     }
 
     case "thread": {
