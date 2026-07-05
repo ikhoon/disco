@@ -96,6 +96,7 @@ log in normally, and disco captures your token straight into the macOS Keychain.
 disco auth login                           # ← recommended: browser sign-in, no copy-paste
 disco auth login --clipboard               # already copied the header? read it from the clipboard
 disco auth login --manual                  # guided manual paste (any browser)
+disco auth login --browser-path "<bin>"    # force a specific Chromium binary (e.g. Arc/Vivaldi)
 disco auth set --token "<your-token>"      # or store a token you already have (validates first)
 echo "<your-token>" | disco auth set       # or via stdin
 DISCORD_TOKEN="<token>" disco whoami        # or one-off via env
@@ -119,7 +120,8 @@ and disco observes the `authorization` header your browser sends to
 never sees your password and never does a programmatic login. When it captures
 the token it validates it (`/users/@me`), stores it in the Keychain, and closes
 the browser. macOS only; if no supported browser is found it falls back to
-`--manual`.
+`--manual`. Auto-discovery covers Chrome, Chromium, Brave, and Edge — for
+anything else (Arc, Vivaldi, a custom install) pass `--browser-path "<binary>"`.
 
 ### Getting a user token manually (the `--manual` path)
 

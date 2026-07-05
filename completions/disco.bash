@@ -25,7 +25,9 @@ _disco_complete() {
       return
       ;;
     --browser-path)
-      COMPREPLY=( $(compgen -f -- "$cur") )
+      # mapfile + filenames so browser paths with spaces (all macOS apps) aren't word-split.
+      mapfile -t COMPREPLY < <(compgen -f -- "$cur")
+      compopt -o filenames 2>/dev/null
       return
       ;;
   esac

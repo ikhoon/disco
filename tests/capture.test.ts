@@ -65,16 +65,19 @@ describe("RequestHeaderCollector", () => {
 });
 
 describe("findBrowser", () => {
-  test("returns the first installed candidate", () => {
+  test("returns the first installed candidate in priority order", () => {
     const dir = mkdtempSync(join(tmpdir(), "disco-fb-"));
     try {
-      const path = join(dir, "Brave");
-      writeFileSync(path, "");
+      const chrome = join(dir, "Chrome");
+      const brave = join(dir, "Brave");
+      writeFileSync(chrome, "");
+      writeFileSync(brave, ""); // both installed → priority (not just presence) must decide
       const candidates: BrowserCandidate[] = [
         { name: "Missing", path: join(dir, "nope") },
-        { name: "Brave", path },
+        { name: "Chrome", path: chrome },
+        { name: "Brave", path: brave },
       ];
-      expect(findBrowser(undefined, candidates)).toEqual({ name: "Brave", path });
+      expect(findBrowser(undefined, candidates)).toEqual({ name: "Chrome", path: chrome });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
