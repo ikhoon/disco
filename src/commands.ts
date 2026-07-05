@@ -29,9 +29,13 @@ export async function cmdWhoami(client: DiscordClient, json: boolean): Promise<v
     printJson(me);
     return;
   }
+  const name = displayName(me);
+  // Only add the @handle when it differs from the display name (avoids "ikhoon (@ikhoon)").
+  const handle = me.username && me.username !== name ? ` (@${me.username})` : "";
   const kind = client.isBot ? "bot" : "user";
-  info(`Authenticated as ${displayName(me)} (@${me.username}) · id ${me.id} · token type: ${kind}`);
-  if (me.email) info(`email: ${me.email}`);
+  info(`👤  ${name}${handle}  ·  ${kind} token`);
+  info(`    ${"id".padEnd(5)}  ${me.id}`);
+  if (me.email) info(`    ${"email".padEnd(5)}  ${me.email}`);
 }
 
 // ---- auth login -------------------------------------------------------------
@@ -58,11 +62,9 @@ export async function cmdAuthLogin(opts: AuthLoginOpts): Promise<void> {
     );
   }
   // Reassure + stay honest: it's your own account and your own token.
-  info(
-    "This signs in with your own Discord account: the token stays on this machine, " +
-      "encrypted in the macOS Keychain, and disco only ever reads (never posts). " +
-      "Note: automating a user account is against Discord's ToS — use your own account at your own risk.",
-  );
+  info("🔐  Signing in with your own Discord account.");
+  info("    Your token never leaves this machine — stored encrypted in the macOS Keychain; disco only reads, never posts.");
+  info("    ⚠️  Automating a user account is against Discord's ToS — your own account, your own risk.");
 
   let token: string;
   if (opts.clipboard) {
@@ -89,9 +91,10 @@ async function finishLogin(raw: string, json: boolean): Promise<void> {
   const token = raw.trim();
   if (!token) throw new DiscordError(0, undefined, "no token captured.");
   const cred: Credential = { token, bot: false };
+  info("✓  Token captured.");
   await cmdWhoami(new DiscordClient(cred), json); // validates via /users/@me; throws on 401
   await storeCredential(cred);
-  info("✓ logged in — token stored securely in the macOS Keychain.");
+  info("🔑  Saved to the macOS Keychain — you're all set.");
 }
 
 // ---- guilds -----------------------------------------------------------------

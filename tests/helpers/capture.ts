@@ -17,6 +17,22 @@ export async function captureStdout(fn: () => unknown): Promise<string> {
   return buf;
 }
 
+/** Capture everything a function writes to process.stderr (info/warn/debug logs). */
+export async function captureStderr(fn: () => unknown): Promise<string> {
+  const original = process.stderr.write.bind(process.stderr);
+  let buf = "";
+  (process.stderr as any).write = (chunk: unknown): boolean => {
+    buf += typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk as Uint8Array);
+    return true;
+  };
+  try {
+    await fn();
+  } finally {
+    (process.stderr as any).write = original;
+  }
+  return buf;
+}
+
 /** Parse the `{ "data": ... }` envelope printed by --json commands. */
 export function parseEnvelope(out: string): any {
   return JSON.parse(out).data;
