@@ -52,7 +52,7 @@ _disco_subcommands() {
     'channels:list channels in a server'
     'dms:list your DM / group-DM channels'
     'whoami:show the authenticated account'
-    'auth:auth status / set / clear'
+    'auth:auth login / status / set / clear'
     'config:show or set config'
     'completions:print or install shell completion'
     'help:show help'
@@ -147,10 +147,13 @@ _disco_cmd_whoami() {
 _disco_cmd_auth() {
   _arguments \
     '--token[token to store (with `set`)]:token:' \
+    '--manual[auth login: skip the browser, paste the token manually]' \
+    '--clipboard[auth login: read the token from the clipboard (pbpaste)]' \
+    '--browser-path[auth login: path to a Chromium browser binary]:path:_files' \
     '--bot[store/verify as a bot token]' \
     '--json[JSON output]' \
     '--no-color[disable colored output]' \
-    '1:subcommand:(status set clear)'
+    '1:subcommand:(status login set clear)'
 }
 
 _disco_cmd_config() {

@@ -20,6 +20,7 @@ import {
   cmdMention,
   cmdSearch,
   cmdDms,
+  cmdAuthLogin,
 } from "./commands.ts";
 
 // ---- help -------------------------------------------------------------------
@@ -42,6 +43,8 @@ Read commands:
 
 Auth & config:
   auth [status]       Show auth status (verifies the token)
+  auth login          Sign in via the browser (assisted capture)  (user token)
+                      [--manual | --clipboard | --browser-path <bin>]
   auth set            Store a token (--token <t> | via stdin) [--bot]
   auth clear          Remove the stored token
   config              Show config file + path
@@ -60,11 +63,14 @@ Global options:
 
 Time (T) accepts: 10m, 2h, 3d, 1w, or an ISO date (2026-06-01T09:00).
 
-Token: set DISCORD_TOKEN, or run \`disco auth set\` (stored in the macOS Keychain).
+Token: run \`disco auth login\` (easiest — opens the browser and captures your
+  token into the macOS Keychain), set DISCORD_TOKEN, or run \`disco auth set\`.
   A user token unlocks search + mentions + DMs (⚠️ self-bot use violates Discord ToS).
   A bot token (--bot) only reads channels/threads/messages where the bot is present.
 
-Get a user token: open Discord in the browser → DevTools → Network → copy the
+It's your own account and your own token: it stays on this machine, encrypted in
+the Keychain, and disco only ever reads. \`auth login\` just automates the manual
+step below — open Discord in the browser → DevTools → Network → copy the
 'authorization' request header value (used raw, no "Bot " prefix).
 
 Config file: ${configPath()}
@@ -102,6 +108,16 @@ async function runAuth(args: Args): Promise<void> {
     await clearCredential();
     info("token cleared from the Keychain.");
     return;
+  }
+
+  if (sub === "login") {
+    return cmdAuthLogin({
+      json,
+      manual: args.flags.manual === true,
+      clipboard: args.flags.clipboard === true,
+      browserPath: str(args.flags["browser-path"]),
+      bot: args.flags.bot === true,
+    });
   }
 
   if (sub === "set") {

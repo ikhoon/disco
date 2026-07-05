@@ -89,18 +89,41 @@ Or run without installing: `bun run src/index.ts --help`.
 
 ## Auth
 
-`disco` reads a token from `DISCORD_TOKEN` (env) or the **macOS Keychain**.
+The easiest way is **`disco auth login`** — it opens Discord in your browser, you
+log in normally, and disco captures your token straight into the macOS Keychain.
 
 ```bash
-disco auth set --token "<your-token>"     # stores in the Keychain (validates first)
-echo "<your-token>" | disco auth set      # or via stdin
-DISCORD_TOKEN="<token>" disco whoami       # or one-off via env
-disco auth                                 # show status (who am I?)
-disco auth clear                           # forget the token
-disco auth set --token "<bot-token>" --bot # store a bot token instead
+disco auth login                           # ← recommended: browser sign-in, no copy-paste
+disco auth login --clipboard               # already copied the header? read it from the clipboard
+disco auth login --manual                  # guided manual paste (any browser)
+disco auth login --browser-path "<bin>"    # force a specific Chromium binary (e.g. Arc/Vivaldi)
+disco auth set --token "<your-token>"      # or store a token you already have (validates first)
+echo "<your-token>" | disco auth set       # or via stdin
+DISCORD_TOKEN="<token>" disco whoami        # or one-off via env
+disco auth                                  # show status (who am I?)
+disco auth clear                            # forget the token
+disco auth set --token "<bot-token>" --bot  # store a bot token instead
 ```
 
-### Getting a user token
+**It's your own account, your own token.** Reading your own Discord data with your
+own credentials isn't a hacking/"legal" problem — the only caveat is Discord's
+Terms of Service on automating a user account (see the warning up top). The token
+**never leaves your machine**: it's stored encrypted in the **macOS Keychain**
+(or read once from `DISCORD_TOKEN`), and `disco` is **read-only** — it never posts.
+
+### How `disco auth login` works
+
+It launches a Chromium-family browser (Chrome / Chromium / Brave / Edge) against
+an **isolated throwaway profile** with remote debugging on, you log in yourself,
+and disco observes the `authorization` header your browser sends to
+`discord.com/api` — i.e. it just automates the manual DevTools step below. It
+never sees your password and never does a programmatic login. When it captures
+the token it validates it (`/users/@me`), stores it in the Keychain, and closes
+the browser. macOS only; if no supported browser is found it falls back to
+`--manual`. Auto-discovery covers Chrome, Chromium, Brave, and Edge — for
+anything else (Arc, Vivaldi, a custom install) pass `--browser-path "<binary>"`.
+
+### Getting a user token manually (the `--manual` path)
 
 1. Open Discord in your **browser** (not the desktop app) and log in.
 2. Open DevTools (`Cmd+Opt+I`) → **Network** tab.
@@ -108,7 +131,8 @@ disco auth set --token "<bot-token>" --bot # store a bot token instead
    `discord.com/api`, and copy the value of the **`authorization`** request
    header. That raw value *is* your token (no `Bot ` prefix).
 
-Tokens rotate on password change / logout — re-extract if you start getting 401s.
+Tokens rotate on password change / logout — re-run `disco auth login` if you
+start getting 401s.
 
 ---
 
