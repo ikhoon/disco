@@ -62,12 +62,12 @@ const CONVERSATION: DiscordMessage[] = [
 const NICKS: Record<string, string> = { u_annie_dev: "annie", u_jkim: "jaykim" };
 
 const CHANNELS: DiscordChannel[] = [
-  { id: "222222222222222200", name: "welcome", type: 0, position: 0 },
+  { id: "222222222222222200", name: "welcome", type: 0, position: 0, topic: "Start here — introductions and rules" },
   { id: "222222222222222299", name: "ENGINEERING", type: 4, position: 1 },
-  { id: CHAN, name: "general", type: 0, parent_id: "222222222222222299", position: 0 },
-  { id: "222222222222222223", name: "backend", type: 0, parent_id: "222222222222222299", position: 1 },
+  { id: CHAN, name: "general", type: 0, parent_id: "222222222222222299", position: 0, topic: "Team-wide chat" },
+  { id: "222222222222222223", name: "backend", type: 0, parent_id: "222222222222222299", position: 1, topic: "API and services" },
   { id: "222222222222222224", name: "release-1-42", type: 11, parent_id: "222222222222222299", position: 2 },
-  { id: "222222222222222225", name: "standup", type: 2, parent_id: "222222222222222299", position: 3 },
+  { id: "222222222222222225", name: "standup", type: 2, parent_id: "222222222222222299", position: 3, topic: "Daily voice standup, 10:00" },
 ];
 
 /** A fake client so the real cmdWhoami formatter runs without touching the API. */

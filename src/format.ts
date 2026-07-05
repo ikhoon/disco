@@ -171,6 +171,7 @@ export function printChannels(channels: DiscordChannel[], json: boolean): void {
       channels.map((c) => ({
         id: c.id,
         name: c.name ?? null,
+        topic: c.topic ?? null,
         type: c.type,
         type_name: CHANNEL_TYPE[c.type] ?? String(c.type),
         parent_id: c.parent_id ?? null,
@@ -189,12 +190,16 @@ export function printChannels(channels: DiscordChannel[], json: boolean): void {
     channels
       .filter((c) => c.type !== 4 && (c.parent_id ?? null) === parentId)
       .sort((a, b) => pos(a) - pos(b));
-  // Read like Discord's sidebar: just the names, grouped under their categories —
-  // text channels as the tight `#channel`, richer types with an emoji. Snowflake
-  // ids are noise here (you read a channel by name now), so they live only in --json.
+  // Read like Discord's sidebar: names grouped under their categories — text as
+  // the tight `#channel`, richer types with an emoji — followed by the channel's
+  // topic in dim gray so you can see what each is for. (ids live only in --json.)
   const line = (c: DiscordChannel) => {
     const nm = c.name ?? "(unnamed)";
-    return c.type === 0 ? `    #${nm}` : `    ${CHANNEL_ICON[c.type] ?? "#"} ${nm}`;
+    const marker = c.type === 0 ? `#${nm}` : `${CHANNEL_ICON[c.type] ?? "#"} ${nm}`;
+    // Topic stays in the readable default foreground (it's useful info); only the
+    // dash separator is dim, so it reads as a subtitle without straining to see.
+    const topic = c.topic ? `  ${dim("—")} ${excerpt(c.topic, 60)}` : "";
+    return `    ${marker}${topic}`;
   };
 
   const out: string[] = [];
