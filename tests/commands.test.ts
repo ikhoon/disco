@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { DiscordClient } from "../src/client.ts";
-import { cmdDms, cmdGuilds, cmdMessage, cmdMention, cmdChannel, cmdSearch } from "../src/commands.ts";
+import { cmdDms, cmdGuilds, cmdMessage, cmdMention, cmdChannel, cmdSearch, cmdWhoami } from "../src/commands.ts";
 import type { DiscordMessage } from "../src/types.ts";
-import { captureStdout, parseEnvelope } from "./helpers/capture.ts";
+import { captureStdout, captureStderr, parseEnvelope } from "./helpers/capture.ts";
 
 // A scriptable fake client: route requests by path (+ optional query assert).
 type Handler = (path: string, opts: any) => unknown;
@@ -35,6 +35,36 @@ function msg(id: string, ts: string, content: string): DiscordMessage {
     mentions: [],
   };
 }
+
+describe("cmdWhoami", () => {
+  const route = (over: Record<string, unknown> = {}) => ({
+    "/users/@me": () => ({ id: "710", username: "ikhoon", global_name: "ikhoon", email: "ih@example.com", ...over }),
+  });
+
+  test("omits the @handle when it equals the display name, and aligns id/email", async () => {
+    const out = await captureStderr(() => cmdWhoami(fakeClient(route()), false));
+    expect(out).toContain("👤  ikhoon  ·  user token");
+    expect(out).not.toContain("(@ikhoon)"); // no redundant handle
+    expect(out).toMatch(/id\s+710/);
+    expect(out).toMatch(/email\s+ih@example\.com/);
+  });
+
+  test("shows the @handle when the display name differs from the username", async () => {
+    const out = await captureStderr(() => cmdWhoami(fakeClient(route({ global_name: "Load Balancer" })), false));
+    expect(out).toContain("👤  Load Balancer (@ikhoon)  ·  user token");
+  });
+
+  test("bot token is labeled and has no email line", async () => {
+    const out = await captureStderr(() => cmdWhoami(fakeClient(route({ email: undefined }), true), false));
+    expect(out).toContain("bot token");
+    expect(out).not.toContain("email");
+  });
+
+  test("--json emits the raw user object to stdout", async () => {
+    const out = await captureStdout(() => cmdWhoami(fakeClient(route()), true));
+    expect(parseEnvelope(out)).toMatchObject({ id: "710", username: "ikhoon" });
+  });
+});
 
 describe("cmdDms", () => {
   const dms = [

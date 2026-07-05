@@ -212,7 +212,8 @@ export async function captureUserToken(opts: { browserPath?: string; timeoutMs?:
   };
 
   try {
-    info(`Opening ${browser.name} — log in to Discord. Waiting for the token… (Ctrl-C to cancel)`);
+    info(`🌐  Opening ${browser.name} — log in to Discord and disco will grab your token…`);
+    info(`    Waiting… (press Ctrl-C to cancel)`);
     // Isolated profile → a separate instance even if the user's browser is open,
     // so kill()/cleanup never touches their real session.
     proc = Bun.spawn(
