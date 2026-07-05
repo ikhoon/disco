@@ -31,7 +31,7 @@ const HELP = `disco ${VERSION} — Discord activity CLI
 Usage: disco <command> [options]
 
 Read commands:
-  read <url|id|name>  Auto-dispatch a URL/ID, or a channel name ("armeria", "Server/armeria")
+  read <url|id|name>  Auto-dispatch a URL/ID, or a channel name ("general", "Server/general")
   channel <url|id|name>  Channel history      [--days N | --limit N] [--since T]
   thread <url|id>     Thread messages         [--limit N]
   message <url>       Single message by link  (or: message <channelId> <messageId>)
@@ -64,7 +64,7 @@ Global options:
 
 Time (T) accepts: 10m, 2h, 3d, 1w, or an ISO date (2026-06-01T09:00).
 
-Channel names (read/channel): "armeria" or "Server/armeria". The first lookup
+Channel names (read/channel): "general" or "Server/general". The first lookup
 scans your servers; the result is cached to ~/.config/disco/channel-cache.json,
 so it's instant next time. Use --refresh to re-resolve (e.g. after a rename).
 

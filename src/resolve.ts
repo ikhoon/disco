@@ -1,7 +1,7 @@
 // Resolve a channel reference from a URL, a bare snowflake, or a human name:
-//   "armeria"            → a channel named "armeria" (in the default guild, else any)
-//   "Armeria/armeria"    → "armeria" in a server whose name matches "Armeria"
-//   "LINE Open Source/armeria"   → spaces are fine (quote it, or leave it unquoted)
+//   "general"            → a channel named "general" (in the default guild, else any)
+//   "Acme/general"       → "general" in a server whose name matches "Acme"
+//   "My Team/general"    → spaces are fine (quote it, or leave it unquoted)
 // A URL or snowflake resolves with no network calls; a name lists your servers
 // and their channels to find the match.
 
@@ -67,7 +67,17 @@ export async function resolveChannelRef(
     );
   }
 
-  // 2. A previously-resolved name returns instantly from the local cache.
+  // 2. Name lookup lists your servers, so it needs a user token — reject bots
+  //    before touching the cache (a bot never does name resolution at all).
+  if (client.isBot) {
+    throw new DiscordError(
+      0,
+      undefined,
+      `name lookup ("${input}") needs a user token (it lists your servers). Use a channel ID or URL with a bot token.`,
+    );
+  }
+
+  // 3. A previously-resolved name returns instantly from the local cache.
   const cacheKey = input.trim().toLowerCase();
   if (!refresh) {
     const hit = loadCache(cachePath)[cacheKey];
@@ -77,15 +87,7 @@ export async function resolveChannelRef(
     }
   }
 
-  if (client.isBot) {
-    throw new DiscordError(
-      0,
-      undefined,
-      `name lookup ("${input}") needs a user token (it lists your servers). Use a channel ID or URL with a bot token.`,
-    );
-  }
-
-  // 3. Split "server/channel" on the LAST slash (server names may contain spaces,
+  // 4. Split "server/channel" on the LAST slash (server names may contain spaces,
   //    not slashes). A leading '#' on the channel is accepted and stripped.
   const slash = input.lastIndexOf("/");
   const guildQuery = (slash >= 0 ? input.slice(0, slash) : "").trim().toLowerCase();
@@ -94,7 +96,7 @@ export async function resolveChannelRef(
     throw new DiscordError(0, undefined, `could not read "${input}" as a URL, ID, or channel name.`);
   }
 
-  // 4. Choose which server(s) to search.
+  // 5. Choose which server(s) to search.
   const guilds = await client.request<DiscordGuild[]>("/users/@me/guilds", { query: { limit: 200 } });
   let searchIn: DiscordGuild[];
   if (guildQuery) {
@@ -110,7 +112,7 @@ export async function resolveChannelRef(
     }
   }
 
-  // 5. Collect channels named channelQuery (case-insensitive), skipping categories.
+  // 6. Collect channels named channelQuery (case-insensitive), skipping categories.
   const matches: { guild: DiscordGuild; channel: DiscordChannel }[] = [];
   for (const g of searchIn) {
     let channels: DiscordChannel[];
@@ -142,7 +144,7 @@ export async function resolveChannelRef(
     );
   }
   const ref = { guildId: matches[0].guild.id, channelId: matches[0].channel.id };
-  // 6. Remember it so this name resolves instantly next time.
+  // 7. Remember it so this name resolves instantly next time.
   const cache = loadCache(cachePath);
   cache[cacheKey] = ref;
   saveCache(cachePath, cache);

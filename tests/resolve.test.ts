@@ -23,16 +23,16 @@ const throwingClient = () =>
   ({ isBot: false, request: async () => { throw new Error("network was called"); } }) as unknown as DiscordClient;
 
 const GUILDS = [
-  { id: "g1", name: "Armeria" },
-  { id: "g2", name: "LINE Open Source" },
+  { id: "g1", name: "Acme" },
+  { id: "g2", name: "Globex" },
 ];
 const CHANNELS: Record<string, any[]> = {
   g1: [
-    { id: "c1", name: "armeria", type: 0 },
-    { id: "c1ko", name: "armeria-ko", type: 0 },
-    { id: "cat", name: "General", type: 4 }, // category, must be skipped
+    { id: "c1", name: "general", type: 0 },
+    { id: "c1r", name: "releases", type: 0 },
+    { id: "cat", name: "Team", type: 4 }, // category, must be skipped
   ],
-  g2: [{ id: "c9", name: "armeria", type: 0 }], // same name in another server → ambiguous
+  g2: [{ id: "c9", name: "general", type: 0 }], // same name in another server → ambiguous
 };
 const nameClient = () =>
   fakeClient({
@@ -58,34 +58,34 @@ describe("resolveChannelRef", () => {
   });
 
   test('resolves "Server/channel" to the channel id', async () => {
-    const ref = await resolveChannelRef("Armeria/armeria", nameClient(), { cachePath: tmpCache() });
+    const ref = await resolveChannelRef("Acme/general", nameClient(), { cachePath: tmpCache() });
     expect(ref).toEqual({ guildId: "g1", channelId: "c1" });
   });
 
   test("strips a leading # and matches case-insensitively", async () => {
-    const ref = await resolveChannelRef("armeria/#ARMERIA-KO", nameClient(), { cachePath: tmpCache() });
-    expect(ref).toEqual({ guildId: "g1", channelId: "c1ko" });
+    const ref = await resolveChannelRef("acme/#RELEASES", nameClient(), { cachePath: tmpCache() });
+    expect(ref).toEqual({ guildId: "g1", channelId: "c1r" });
   });
 
   test("uses default_guild when the name has no server part", async () => {
-    const ref = await resolveChannelRef("armeria", nameClient(), { defaultGuild: "g2", cachePath: tmpCache() });
+    const ref = await resolveChannelRef("general", nameClient(), { defaultGuild: "g2", cachePath: tmpCache() });
     expect(ref).toEqual({ guildId: "g2", channelId: "c9" });
   });
 
   test("errors with the candidate list when a bare name is ambiguous across servers", async () => {
     await expect(
-      resolveChannelRef("armeria", nameClient(), { cachePath: tmpCache() }),
+      resolveChannelRef("general", nameClient(), { cachePath: tmpCache() }),
     ).rejects.toThrow(/matches 2 channels/);
   });
 
   test("errors clearly when no channel matches", async () => {
     await expect(
-      resolveChannelRef("Armeria/nope", nameClient(), { cachePath: tmpCache() }),
+      resolveChannelRef("Acme/nope", nameClient(), { cachePath: tmpCache() }),
     ).rejects.toThrow(/no channel named "#nope"/);
   });
 
   test("rejects name lookup on a bot token", async () => {
-    await expect(resolveChannelRef("armeria", fakeClient({}, true))).rejects.toThrow(/needs a user token/);
+    await expect(resolveChannelRef("general", fakeClient({}, true))).rejects.toThrow(/needs a user token/);
   });
 
   test("a malformed Discord URL is a parse error, not a name lookup", async () => {
@@ -97,30 +97,30 @@ describe("resolveChannelRef", () => {
   describe("caching", () => {
     test("a resolved name is served from cache on the next call (no network)", async () => {
       const cachePath = tmpCache();
-      const first = await resolveChannelRef("Armeria/armeria", nameClient(), { cachePath });
+      const first = await resolveChannelRef("Acme/general", nameClient(), { cachePath });
       expect(first).toEqual({ guildId: "g1", channelId: "c1" });
       // Second call would throw if it hit the network — but the cache answers it.
-      const second = await resolveChannelRef("Armeria/armeria", throwingClient(), { cachePath });
+      const second = await resolveChannelRef("Acme/general", throwingClient(), { cachePath });
       expect(second).toEqual({ guildId: "g1", channelId: "c1" });
     });
 
     test("--refresh bypasses the cache and re-resolves", async () => {
       const cachePath = tmpCache();
-      await resolveChannelRef("Armeria/armeria", nameClient(), { cachePath });
+      await resolveChannelRef("Acme/general", nameClient(), { cachePath });
       // With refresh, a throwing client means the network WAS consulted → it throws.
       await expect(
-        resolveChannelRef("Armeria/armeria", throwingClient(), { cachePath, refresh: true }),
+        resolveChannelRef("Acme/general", throwingClient(), { cachePath, refresh: true }),
       ).rejects.toThrow(/network was called/);
     });
 
     test("errors are not cached", async () => {
       const cachePath = tmpCache();
       await expect(
-        resolveChannelRef("Armeria/nope", nameClient(), { cachePath }),
+        resolveChannelRef("Acme/nope", nameClient(), { cachePath }),
       ).rejects.toThrow(/no channel named/);
       // A retry still hits the network (nothing was cached) — throwing client proves it.
       await expect(
-        resolveChannelRef("Armeria/nope", throwingClient(), { cachePath }),
+        resolveChannelRef("Acme/nope", throwingClient(), { cachePath }),
       ).rejects.toThrow(/network was called/);
     });
   });
