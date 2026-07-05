@@ -33,9 +33,10 @@ export async function cmdWhoami(client: DiscordClient, json: boolean): Promise<v
   // Only add the @handle when it differs from the display name (avoids "ikhoon (@ikhoon)").
   const handle = me.username && me.username !== name ? ` (@${me.username})` : "";
   const kind = client.isBot ? "bot" : "user";
+  // Emoji per item so every value lines up in one column (👤/🆔/📧 are all 2 cells wide).
   info(`👤  ${name}${handle}  ·  ${kind} token`);
-  info(`    ${"id".padEnd(5)}  ${me.id}`);
-  if (me.email) info(`    ${"email".padEnd(5)}  ${me.email}`);
+  info(`🆔  ${me.id}`);
+  if (me.email) info(`📧  ${me.email}`);
 }
 
 // ---- auth login -------------------------------------------------------------
