@@ -1,6 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, afterEach } from "bun:test";
 import { normalizeMessage, printMessages, printDms, printJson } from "../src/format.ts";
 import { displayName, CHANNEL_TYPE, type DiscordMessage, type DiscordChannel } from "../src/types.ts";
+import { setColorEnabled } from "../src/color.ts";
 import { captureStdout, parseEnvelope } from "./helpers/capture.ts";
 
 const base: DiscordMessage = {
@@ -91,6 +92,39 @@ describe("printDms", () => {
     const out = await captureStdout(() => printDms(channels, false));
     expect(out).toContain("@ alice  1");
     expect(out).toContain("👥 project  2");
+  });
+});
+
+describe("colored output", () => {
+  afterEach(() => setColorEnabled(false));
+
+  test("styles timestamp/author/permalink when color is on", async () => {
+    setColorEnabled(true);
+    const out = await captureStdout(() => printMessages([base], { json: false, guildId: "111" }));
+    expect(out).toContain("\x1b[92m2026-07-04"); // green timestamp
+    expect(out).toContain("\x1b[96mJane Doe\x1b[0m"); // cyan author
+    expect(out).toContain("\x1b[90mhttps://discord.com/channels/111/222/333\x1b[0m"); // dim permalink
+  });
+
+  test("plain text when color is off (pipes stay clean)", async () => {
+    const out = await captureStdout(() => printMessages([base], { json: false, guildId: "111" }));
+    expect(out).not.toContain("\x1b[");
+  });
+
+  test("--json output never carries ANSI codes even with color forced on", async () => {
+    setColorEnabled(true);
+    const out = await captureStdout(() => printMessages([base], { json: true, guildId: "111" }));
+    expect(out).not.toContain("\x1b[");
+    expect(parseEnvelope(out)[0].author.name).toBe("Jane Doe");
+  });
+
+  test("dm and channel ids go yellow", async () => {
+    setColorEnabled(true);
+    const out = await captureStdout(() =>
+      printDms([{ id: "1", type: 1, recipients: [{ id: "u", username: "alice" }] }], false),
+    );
+    expect(out).toContain("\x1b[96malice\x1b[0m");
+    expect(out).toContain("\x1b[93m1\x1b[0m");
   });
 });
 

@@ -53,7 +53,14 @@ out=$("$DISCO" --help 2>&1)
 for sub in read channel thread message mention search guilds channels dms whoami auth config completions; do
   assert_match "--help lists '$sub'" "$sub" "$out"
 done
+assert_match "--help lists '--no-color'" "--no-color" "$out"
 assert_exit "bare invocation prints help and exits 0" 0 "$DISCO"
+
+# Piped (non-TTY) output must carry no ANSI codes, exactly as scripts see it.
+out=$("$DISCO" --help 2>&1)
+if [[ "$out" == *$'\033['* ]]; then fail "piped output has no ANSI codes" "found escape sequences"
+else pass "piped output has no ANSI codes"
+fi
 
 # Completions embed correctly into the compiled binary.
 out=$("$DISCO" completions --shell zsh 2>&1)

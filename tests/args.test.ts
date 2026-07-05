@@ -18,6 +18,12 @@ describe("parseArgs", () => {
     expect(b._).toEqual(["search", "deploy failed"]);
   });
 
+  test("--no-color is boolean and never consumes the next argument", () => {
+    const a = parseArgs(["channel", "--no-color", "123"]);
+    expect(a.flags["no-color"]).toBe(true);
+    expect(a._).toEqual(["channel", "123"]);
+  });
+
   test("value flags take the next argument (--shell zsh)", () => {
     const a = parseArgs(["completions", "--shell", "zsh"]);
     expect(a.flags.shell).toBe("zsh");
