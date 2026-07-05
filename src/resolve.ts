@@ -150,3 +150,33 @@ export async function resolveChannelRef(
   saveCache(cachePath, cache);
   return ref;
 }
+
+/**
+ * Resolve a server reference — a guild id, a channel URL's guild, or a server
+ * NAME — to a guild id. Names match case-insensitively (exact wins over
+ * substring); ambiguity and misses error clearly. Bots must pass an id.
+ */
+export async function resolveGuild(input: string, client: DiscordClient): Promise<string> {
+  const t = input.trim();
+  if (/^\d{15,25}$/.test(t)) return t;
+  const urlGuild = t.match(/channels\/(\d+)/)?.[1];
+  if (urlGuild) return urlGuild;
+
+  if (client.isBot) {
+    throw new DiscordError(
+      0,
+      undefined,
+      `looking up a server by name ("${input}") needs a user token — pass a guild id with a bot token.`,
+    );
+  }
+  const q = t.toLowerCase();
+  const guilds = await client.request<DiscordGuild[]>("/users/@me/guilds", { query: { limit: 200 } });
+  const exact = guilds.filter((g) => g.name.toLowerCase() === q);
+  const matches = exact.length ? exact : guilds.filter((g) => g.name.toLowerCase().includes(q));
+  if (matches.length === 0) throw new DiscordError(0, undefined, `no server matching "${input}".`);
+  if (matches.length > 1) {
+    const list = matches.map((g) => `  ${g.name}`).join("\n");
+    throw new DiscordError(0, undefined, `"${input}" matches ${matches.length} servers — use the exact name:\n${list}`);
+  }
+  return matches[0].id;
+}

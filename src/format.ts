@@ -268,14 +268,16 @@ export function printGuilds(guilds: DiscordGuild[], json: boolean): void {
     info("(no guilds)");
     return;
   }
-  // Name (what you scan for) + a 👑 if you own it + the member count in the
-  // readable default foreground; the id is noise here, so it lives in --json.
+  // Name (what you scan for) + a 👑 if you own it, then the member count in the
+  // readable default foreground — aligned into a column so sizes line up for
+  // comparison. The id is noise here, so it lives in --json.
+  const cell = (g: DiscordGuild) => `${g.name}${g.owner ? " 👑" : ""}`;
+  const width = Math.max(0, ...guilds.map((g) => Bun.stringWidth(cell(g))));
   const rows = guilds
     .map((g) => {
-      const crown = g.owner ? " 👑" : "";
       const members =
         g.approximate_member_count != null ? `  ${dim("·")}  ${fmtCount(g.approximate_member_count)} members` : "";
-      return `  ${g.name}${crown}${members}`;
+      return `  ${padVisible(cell(g), width)}${members}`;
     })
     .join("\n");
   process.stdout.write(rows + "\n");
