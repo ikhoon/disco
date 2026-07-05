@@ -46,5 +46,3 @@ export const dim = wrap("\x1b[90m");
 export const yellow = wrap("\x1b[93m");
 export const cyan = wrap("\x1b[96m");
 export const green = wrap("\x1b[92m");
-export const magenta = wrap("\x1b[95m");
-export const blue = wrap("\x1b[94m");
