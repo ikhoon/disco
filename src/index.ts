@@ -7,7 +7,7 @@ import { loadConfig, saveConfig, configPath } from "./config.ts";
 import { configureLog, warn, info } from "./log.ts";
 import { configureColor, stderrRed } from "./color.ts";
 import { parseRef, parseTime } from "./util.ts";
-import { resolveChannelRef } from "./resolve.ts";
+import { resolveChannelRef, resolveGuild } from "./resolve.ts";
 import { runCompletions } from "./completions.ts";
 import { parseArgs, str, posInt, type Args } from "./args.ts";
 import { VERSION } from "./version.ts";
@@ -64,7 +64,7 @@ Read commands:
   mention             Your recent mentions    [--after T | --since T] [--guild ID] [--limit N]  (user token)
   search <query>      Search messages         [--guild ID | --channel ID] [--count N] [--sort timestamp|relevance]  (user token)
   guilds              List servers you're in
-  channels <guildId>  List channels in a server
+  channels <server|id>  List a server's channels (by name or id)
   dms                 List your DM / group-DM channels  (user token)
   whoami              Show the authenticated account
 
@@ -75,7 +75,7 @@ Auth & config:
   auth set            Store a token (--token <t> | via stdin) [--bot]
   auth clear          Remove the stored token
   config              Show config file + path
-  config set-guild <id>   Set the default guild for search/mention
+  config set-guild <server|id>   Set the default server (by name or id)
   completions         Print shell completion script  [--shell zsh|bash] [--install]
                       (brew installs completions automatically; --install is for manual setups)
 
@@ -187,11 +187,12 @@ async function runConfig(args: Args): Promise<void> {
   const cfg = await loadConfig();
 
   if (sub === "set-guild") {
-    const id = args._[2];
-    if (!id) throw new DiscordError(0, undefined, "usage: disco config set-guild <guildId>");
-    cfg.default_guild = id;
+    const arg = args._.slice(2).join(" ").trim(); // join so a server name with spaces works
+    if (!arg) throw new DiscordError(0, undefined, "usage: disco config set-guild <server-name|id>");
+    const guildId = await resolveGuild(arg, await needClient(args.flags)); // id, URL, or name
+    cfg.default_guild = guildId;
     await saveConfig(cfg);
-    info(`default_guild set to ${id}`);
+    info(`default_guild set to ${guildId}`);
     return;
   }
   if (sub === "path") {
@@ -243,16 +244,19 @@ async function main(argv: string[]): Promise<void> {
       return cmdDms(await needClient(args.flags), json);
 
     case "channels": {
-      const arg = args._[1];
-      let guildId: string | undefined;
+      const arg = args._.slice(1).join(" ").trim(); // join so a server name with spaces works
+      const client = await needClient(args.flags);
+      let guildId: string;
       if (arg) {
-        guildId = /^\d{15,25}$/.test(arg) ? arg : arg.match(/channels\/(\d+)/)?.[1];
+        guildId = await resolveGuild(arg, client); // id, URL, or server name
+      } else {
+        const dg = (await loadConfig()).default_guild;
+        if (!dg) {
+          throw new DiscordError(0, undefined, "usage: disco channels <server-name|id>  (or set a default with `disco config set-guild`)");
+        }
+        guildId = dg;
       }
-      guildId = guildId ?? (await loadConfig()).default_guild;
-      if (!guildId) {
-        throw new DiscordError(0, undefined, "usage: disco channels <guildId>  (or set one with `disco config set-guild`)");
-      }
-      return cmdChannels(await needClient(args.flags), guildId, json);
+      return cmdChannels(client, guildId, json);
     }
 
     case "read": {
@@ -321,13 +325,15 @@ async function main(argv: string[]): Promise<void> {
 
     case "mention": {
       const afterStr = str(args.flags.after) ?? str(args.flags.since);
+      const guildFlag = str(args.flags.guild);
+      const client = await needClient(args.flags);
       const opts = {
         after: afterStr ? parseTime(afterStr) : undefined,
-        guildId: str(args.flags.guild),
+        guildId: guildFlag ? await resolveGuild(guildFlag, client) : undefined, // id or server name
         limit: posInt(args.flags.limit, "limit"),
         json,
       };
-      return cmdMention(await needClient(args.flags), opts);
+      return cmdMention(client, opts);
     }
 
     case "search": {
@@ -336,11 +342,13 @@ async function main(argv: string[]): Promise<void> {
       const cfg = await loadConfig();
       const sortRaw = str(args.flags.sort);
       const sort = sortRaw === "relevance" ? "relevance" : sortRaw === "timestamp" ? "timestamp" : undefined;
+      const client = await needClient(args.flags);
+      const guildFlag = str(args.flags.guild);
       return cmdSearch(
-        await needClient(args.flags),
+        client,
         query,
         {
-          guildId: str(args.flags.guild),
+          guildId: guildFlag ? await resolveGuild(guildFlag, client) : undefined, // id or server name
           channelId: str(args.flags.channel),
           count: posInt(args.flags.count, "count"),
           sort,
