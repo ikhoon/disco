@@ -4,6 +4,7 @@ import type { DiscordMessage, DiscordGuild, DiscordChannel } from "./types.ts";
 import { displayName, CHANNEL_TYPE } from "./types.ts";
 import { fmtTime, permalink } from "./util.ts";
 import { info } from "./log.ts";
+import { bold, dim, cyan, green, yellow } from "./color.ts";
 
 /** JSON-friendly, stable projection of a message. */
 export interface NormalizedMessage {
@@ -72,26 +73,26 @@ export function printJson(payload: unknown): void {
 
 function renderMessage(m: NormalizedMessage): string {
   const lines: string[] = [];
-  const edited = m.edited ? " (edited)" : "";
-  lines.push(`[${fmtTime(m.ts)}] ${m.author.name}${m.author.bot ? " [bot]" : ""}:${edited}`);
+  const edited = m.edited ? dim(" (edited)") : "";
+  lines.push(`[${green(fmtTime(m.ts))}] ${cyan(m.author.name)}${m.author.bot ? dim(" [bot]") : ""}:${edited}`);
   if (m.reply_to) {
-    lines.push(`    ↳ re: ${m.reply_to.author}: "${m.reply_to.excerpt}"`);
+    lines.push(`    ${dim(`↳ re: ${m.reply_to.author}: "${m.reply_to.excerpt}"`)}`);
   }
   const body = m.content.trim();
   if (body) {
     for (const line of body.split("\n")) lines.push(`    ${line}`);
   } else if (m.attachments.length === 0 && m.embeds.length === 0) {
-    lines.push(`    (no text)`);
+    lines.push(`    ${dim("(no text)")}`);
   }
   for (const e of m.embeds) {
     const head = [e.author, e.title].filter(Boolean).join(" · ");
-    if (head || e.url) lines.push(`    ▪ ${head || "(embed)"}${e.url ? ` — ${e.url}` : ""}`);
+    if (head || e.url) lines.push(`    ▪ ${bold(head || "(embed)")}${e.url ? dim(` — ${e.url}`) : ""}`);
     if (e.description) lines.push(`      ${e.description}`);
   }
   for (const a of m.attachments) {
-    lines.push(`    📎 ${a.filename} — ${a.url}`);
+    lines.push(`    📎 ${a.filename}${dim(` — ${a.url}`)}`);
   }
-  lines.push(`    ${m.permalink}`);
+  lines.push(`    ${dim(m.permalink)}`);
   return lines.join("\n");
 }
 
@@ -162,12 +163,12 @@ export function printChannels(channels: DiscordChannel[], json: boolean): void {
     channels
       .filter((c) => c.type !== 4 && (c.parent_id ?? null) === parentId)
       .sort((a, b) => pos(a) - pos(b));
-  const line = (c: DiscordChannel) => `  ${CHANNEL_ICON[c.type] ?? "#"} ${c.name ?? "(unnamed)"}  ${c.id}`;
+  const line = (c: DiscordChannel) => `  ${CHANNEL_ICON[c.type] ?? "#"} ${c.name ?? "(unnamed)"}  ${yellow(c.id)}`;
 
   const out: string[] = [];
   for (const c of childrenOf(null)) out.push(line(c)); // uncategorized first
   for (const cat of categories) {
-    out.push(`${out.length ? "\n" : ""}▸ ${cat.name ?? "(category)"}`);
+    out.push(`${out.length ? "\n" : ""}▸ ${bold(cat.name ?? "(category)")}`);
     for (const c of childrenOf(cat.id)) out.push(line(c));
   }
   process.stdout.write(out.join("\n") + "\n");
@@ -199,7 +200,7 @@ export function printDms(channels: DiscordChannel[], json: boolean): void {
     return;
   }
   const rows = channels
-    .map((c) => `  ${c.type === 3 ? "👥" : "@"} ${label(c)}  ${c.id}`)
+    .map((c) => `  ${c.type === 3 ? "👥" : "@"} ${cyan(label(c))}  ${yellow(c.id)}`)
     .join("\n");
   process.stdout.write(rows + "\n");
 }
@@ -214,7 +215,7 @@ export function printGuilds(guilds: DiscordGuild[], json: boolean): void {
     return;
   }
   const rows = guilds
-    .map((g) => `  ${g.id}  ${g.name}`)
+    .map((g) => `  ${yellow(g.id)}  ${g.name}`)
     .join("\n");
   process.stdout.write(rows + "\n");
 }

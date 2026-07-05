@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Mock disco for the demo GIF: shadows the real binary on PATH during
+# `bun run demo` and defers to demo/render.ts, which prints fictional fixture
+# data through the real formatters (never touches the Discord API).
+exec bun "$(dirname "$0")/../render.ts" "$@"

@@ -5,6 +5,7 @@ import { DiscordClient, DiscordError } from "./client.ts";
 import { resolveCredential, storeCredential, clearCredential, type Credential } from "./auth.ts";
 import { loadConfig, saveConfig, configPath } from "./config.ts";
 import { configureLog, warn, info } from "./log.ts";
+import { configureColor } from "./color.ts";
 import { parseRef, parseTime } from "./util.ts";
 import { runCompletions } from "./completions.ts";
 import { parseArgs, str, posInt, type Args } from "./args.ts";
@@ -50,6 +51,7 @@ Auth & config:
 
 Global options:
   --json              Machine-readable JSON: { "data": ... }  (for jq)
+  --no-color          Disable colored output (also honors the NO_COLOR env var)
   -v, --verbose       Verbose request logging (stderr)
   -q, --quiet         Suppress info logs
   --bot               Treat the token as a bot token ("Bot " prefix)
@@ -157,6 +159,7 @@ async function runConfig(args: Args): Promise<void> {
 async function main(argv: string[]): Promise<void> {
   const args = parseArgs(argv);
   configureLog({ verbose: args.flags.verbose === true, quiet: args.flags.quiet === true });
+  configureColor({ noColor: args.flags["no-color"] === true, json: args.flags.json === true });
 
   if (args.flags.version === true) {
     process.stdout.write(VERSION + "\n");
