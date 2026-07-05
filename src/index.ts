@@ -43,7 +43,8 @@ Read commands:
 
 Auth & config:
   auth [status]       Show auth status (verifies the token)
-  auth login          Sign in via the browser (assisted capture) or --manual/--clipboard  (user token)
+  auth login          Sign in via the browser (assisted capture)  (user token)
+                      [--manual | --clipboard | --browser-path <bin>]
   auth set            Store a token (--token <t> | via stdin) [--bot]
   auth clear          Remove the stored token
   config              Show config file + path

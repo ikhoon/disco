@@ -120,9 +120,10 @@ export function findBrowser(
 // ---- CDP capture ------------------------------------------------------------
 
 /** Poll the DevToolsActivePort file the browser writes into its profile dir. */
-async function readDevToolsPort(profileDir: string): Promise<number> {
+async function readDevToolsPort(profileDir: string, isDead: () => boolean): Promise<number> {
   const file = join(profileDir, "DevToolsActivePort");
   for (let i = 0; i < 100; i++) {
+    if (isDead()) throw new DiscordError(0, undefined, "the browser exited before it was ready.");
     try {
       const first = readFileSync(file, "utf8").split("\n")[0]?.trim();
       const port = first ? Number(first) : NaN;
@@ -135,22 +136,31 @@ async function readDevToolsPort(profileDir: string): Promise<number> {
   throw new DiscordError(0, undefined, "the browser did not expose a debugging port.");
 }
 
-/** Find the page target's WebSocket debugger URL (127.0.0.1 passes CDP's Host check). */
-async function findPageTarget(port: number): Promise<string> {
+/**
+ * Find the Discord page target's WebSocket debugger URL (127.0.0.1 passes CDP's
+ * Host check). Prefer a target that has navigated to discord.com; only fall back
+ * to some other page target if none appears within the poll window (guards
+ * against attaching to a stray new-tab target before navigation commits).
+ */
+async function findPageTarget(port: number, isDead: () => boolean): Promise<string> {
+  let fallback = "";
   for (let i = 0; i < 100; i++) {
+    if (isDead()) throw new DiscordError(0, undefined, "the browser exited before the Discord tab was ready.");
     try {
       const res = await fetch(`http://127.0.0.1:${port}/json`);
       if (res.ok) {
         const targets = (await res.json()) as Array<{ type?: string; url?: string; webSocketDebuggerUrl?: string }>;
         const pages = targets.filter((t) => t.type === "page" && t.webSocketDebuggerUrl);
-        const page = pages.find((t) => (t.url ?? "").includes("discord.com")) ?? pages[0];
-        if (page?.webSocketDebuggerUrl) return page.webSocketDebuggerUrl;
+        const discord = pages.find((t) => (t.url ?? "").includes("discord.com"));
+        if (discord?.webSocketDebuggerUrl) return discord.webSocketDebuggerUrl;
+        if (pages[0]?.webSocketDebuggerUrl) fallback = pages[0].webSocketDebuggerUrl;
       }
     } catch {
       /* endpoint not ready */
     }
     await sleep(100);
   }
+  if (fallback) return fallback;
   throw new DiscordError(0, undefined, "could not find the Discord tab in the browser.");
 }
 
@@ -166,14 +176,20 @@ export async function captureUserToken(opts: { browserPath?: string; timeoutMs?:
 
   let proc: Bun.Subprocess | undefined;
   let ws: WebSocket | undefined;
-  let onSigint: (() => void) | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let browserExited = false;
+  // Clean up (and wipe the throwaway profile's on-disk session) on Ctrl-C, a
+  // `kill`, or a terminal hangup — not just on normal exit.
+  const SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
+  const signalHandlers: Array<() => void> = [];
 
   const cleanup = (): void => {
     if (timer) clearTimeout(timer);
     timer = undefined;
-    if (onSigint) process.off("SIGINT", onSigint);
-    onSigint = undefined;
+    for (let i = 0; i < SIGNALS.length; i++) {
+      if (signalHandlers[i]) process.off(SIGNALS[i], signalHandlers[i]);
+    }
+    signalHandlers.length = 0;
     try {
       ws?.close();
     } catch {
@@ -186,9 +202,10 @@ export async function captureUserToken(opts: { browserPath?: string; timeoutMs?:
       /* already gone */
     }
     proc = undefined;
-    // Removing the throwaway profile also wipes its on-disk copy of the session/token.
+    // Retry: Chrome may still be flushing the profile right after kill(), so a
+    // single rmSync can hit ENOTEMPTY. maxRetries wipes the token-bearing dir.
     try {
-      rmSync(profileDir, { recursive: true, force: true });
+      rmSync(profileDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     } catch {
       /* best effort */
     }
@@ -209,15 +226,22 @@ export async function captureUserToken(opts: { browserPath?: string; timeoutMs?:
       ],
       { stdout: "ignore", stderr: "ignore" },
     );
+    proc.exited.then(() => {
+      browserExited = true;
+    });
 
-    const port = await readDevToolsPort(profileDir);
-    const wsUrl = await findPageTarget(port);
+    const port = await readDevToolsPort(profileDir, () => browserExited);
+    const wsUrl = await findPageTarget(port, () => browserExited);
 
     return await new Promise<string>((resolve, reject) => {
-      onSigint = () => reject(new DiscordError(0, undefined, "cancelled."));
-      process.once("SIGINT", onSigint);
+      for (let i = 0; i < SIGNALS.length; i++) {
+        const handler = () => reject(new DiscordError(0, undefined, "cancelled."));
+        signalHandlers[i] = handler;
+        process.once(SIGNALS[i], handler);
+      }
+      const mins = Math.max(1, Math.round(timeoutMs / 60_000));
       timer = setTimeout(
-        () => reject(new DiscordError(0, undefined, "timed out waiting for login (3 min).")),
+        () => reject(new DiscordError(0, undefined, `timed out waiting for login (${mins} min).`)),
         timeoutMs,
       );
       proc!.exited.then(() =>
@@ -237,6 +261,9 @@ export async function captureUserToken(opts: { browserPath?: string; timeoutMs?:
         const token = collector.feed(msg);
         if (token) resolve(token);
       });
+      ws.addEventListener("close", () =>
+        reject(new DiscordError(0, undefined, "the browser's debugging connection closed before a token was captured.")),
+      );
       ws.addEventListener("error", () =>
         reject(new DiscordError(0, undefined, "lost the debugging connection to the browser.")),
       );
@@ -250,6 +277,15 @@ export async function captureUserToken(opts: { browserPath?: string; timeoutMs?:
 
 /** Open Discord in the default browser, print the DevTools steps, read one pasted line. */
 export async function manualPasteToken(): Promise<string> {
+  // Guard first: with no interactive terminal to read a paste from, fail before
+  // opening a browser tab we'd never use.
+  if (!process.stdin.isTTY) {
+    throw new DiscordError(
+      0,
+      undefined,
+      "no terminal to read from — run `disco auth login` interactively, use --clipboard, or `disco auth set --token <t>`.",
+    );
+  }
   if (process.stderr.isTTY) {
     try {
       Bun.spawn(["open", "https://discord.com/app"], { stdout: "ignore", stderr: "ignore" });
@@ -259,17 +295,14 @@ export async function manualPasteToken(): Promise<string> {
   }
   info(AUTH_GUIDE);
 
-  if (!process.stdin.isTTY) {
-    throw new DiscordError(
-      0,
-      undefined,
-      "no terminal to read from — run `disco auth login` interactively, use --clipboard, or `disco auth set --token <t>`.",
-    );
-  }
   process.stderr.write("Paste the authorization header value, then press Enter: ");
   const rl = createInterface({ input: process.stdin });
   try {
-    const line = await new Promise<string>((resolve) => rl.once("line", resolve));
+    const line = await new Promise<string>((resolve, reject) => {
+      rl.once("line", resolve);
+      // EOF / Ctrl-D emits 'close' but never 'line' — abort instead of hanging.
+      rl.once("close", () => reject(new DiscordError(0, undefined, "no token entered.")));
+    });
     return line.trim();
   } finally {
     rl.close();
