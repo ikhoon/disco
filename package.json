@@ -14,7 +14,9 @@
     "test": "bun test",
     "build": "bun build --compile --minify --outfile dist/disco src/index.ts",
     "install-local": "bun run build && mkdir -p \"$HOME/.local/bin\" && cp dist/disco \"$HOME/.local/bin/disco\"",
-    "package-release": "scripts/package-release.sh"
+    "package-release": "scripts/package-release.sh",
+    "make-icon": "swift make-icon.swift assets/AppIcon.iconset && cp assets/AppIcon.iconset/icon_512x512.png assets/disco-logo.png",
+    "demo": "PATH=\"$PWD/demo/bin:$PATH\" vhs demo/demo.tape"
   },
   "dependencies": {},
   "devDependencies": {
