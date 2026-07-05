@@ -66,6 +66,7 @@ _disco_cmd_read() {
     '--limit[max messages]:n:' \
     '--since[since time (10m/2h/3d/1w or ISO date)]:time:' \
     '--json[JSON output]' \
+    '--no-color[disable colored output]' \
     '--bot[treat the token as a bot token]' \
     '1:discord url or channel id:'
 }
@@ -76,6 +77,7 @@ _disco_cmd_channel() {
     '--limit[max messages]:n:' \
     '--since[since time (10m/2h/3d/1w or ISO date)]:time:' \
     '--json[JSON output]' \
+    '--no-color[disable colored output]' \
     '--bot[treat the token as a bot token]' \
     '1:channel url or id:'
 }
@@ -84,6 +86,7 @@ _disco_cmd_thread() {
   _arguments \
     '--limit[max messages]:n:' \
     '--json[JSON output]' \
+    '--no-color[disable colored output]' \
     '--bot[treat the token as a bot token]' \
     '1:thread url or id:'
 }
@@ -91,6 +94,7 @@ _disco_cmd_thread() {
 _disco_cmd_message() {
   _arguments \
     '--json[JSON output]' \
+    '--no-color[disable colored output]' \
     '--bot[treat the token as a bot token]' \
     '1:message url or channel id:' \
     '2:message id (when a channel id was given first):'
@@ -103,7 +107,8 @@ _disco_cmd_mention() {
     '--since[alias of --after]:time:' \
     '--guild[limit to one guild]:guild id:' \
     '--limit[max mentions]:n:' \
-    '--json[JSON output]'
+    '--json[JSON output]' \
+    '--no-color[disable colored output]'
 }
 
 _disco_cmd_search() {
@@ -113,28 +118,30 @@ _disco_cmd_search() {
     '--count[result count]:n:' \
     '--sort[result order]:order:(timestamp relevance)' \
     '--json[JSON output]' \
+    '--no-color[disable colored output]' \
     '--bot[treat the token as a bot token]' \
     '1:query:'
 }
 
 _disco_cmd_guilds() {
-  _arguments '--json[JSON output]' '--bot[treat the token as a bot token]'
+  _arguments '--json[JSON output]' '--no-color[disable colored output]' '--bot[treat the token as a bot token]'
 }
 
 _disco_cmd_channels() {
   _arguments \
     '--json[JSON output]' \
+    '--no-color[disable colored output]' \
     '--bot[treat the token as a bot token]' \
     '1:guild id:'
 }
 
 _disco_cmd_dms() {
   # User-token only (bots cannot list their DM channels).
-  _arguments '--json[JSON output]'
+  _arguments '--json[JSON output]' '--no-color[disable colored output]'
 }
 
 _disco_cmd_whoami() {
-  _arguments '--json[JSON output]' '--bot[treat the token as a bot token]'
+  _arguments '--json[JSON output]' '--no-color[disable colored output]' '--bot[treat the token as a bot token]'
 }
 
 _disco_cmd_auth() {
@@ -142,6 +149,7 @@ _disco_cmd_auth() {
     '--token[token to store (with `set`)]:token:' \
     '--bot[store/verify as a bot token]' \
     '--json[JSON output]' \
+    '--no-color[disable colored output]' \
     '1:subcommand:(status set clear)'
 }
 

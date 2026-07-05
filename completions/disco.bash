@@ -33,7 +33,7 @@ _disco_complete() {
   fi
 
   local sub="${words[1]}"
-  local common="--json --bot --verbose -v --quiet -q"
+  local common="--json --no-color --bot --verbose -v --quiet -q"
   local flags="$common"
 
   case "$sub" in
@@ -48,21 +48,21 @@ _disco_complete() {
       ;;
     mention)
       # User-token only; --bot doesn't apply.
-      flags="--json --verbose -v --quiet -q --after --since --guild --limit"
+      flags="--json --no-color --verbose -v --quiet -q --after --since --guild --limit"
       ;;
     search)
       flags="$common --guild --channel --count --sort"
       ;;
     dms)
       # User-token only; --bot doesn't apply.
-      flags="--json --verbose -v --quiet -q"
+      flags="--json --no-color --verbose -v --quiet -q"
       ;;
     auth)
       if [[ $cword -eq 2 && "$cur" != -* ]]; then
         COMPREPLY=( $(compgen -W "status set clear" -- "$cur") )
         return
       fi
-      flags="--token --bot --json"
+      flags="--token --bot --json --no-color"
       ;;
     config)
       if [[ $cword -eq 2 && "$cur" != -* ]]; then
